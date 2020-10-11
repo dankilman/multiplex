@@ -2,6 +2,9 @@ import argparse
 import asyncio
 import io
 import random
+import threading
+import time
+
 import colors
 from colors.colors import _color_code as cc
 
@@ -10,6 +13,7 @@ from multiplex import ansi
 from multiplex.iterator import Iterator
 from multiplex import Viewer
 from multiplex.logging import init_logging
+from multiplex.view_builder import ViewBuilder
 
 
 def run_simple():
@@ -114,12 +118,64 @@ def run_processes():
     return [Iterator(cmds[0])]
 
 
+def run_controller():
+    builder = ViewBuilder()
+    c1 = builder.new_controller("runner1")
+    c2 = builder.new_controller("runner2")
+    viewer = builder.build()
+
+    async def runner(c):
+        await asyncio.sleep(1)
+        c.write("some data 1\n")
+        await asyncio.sleep(1)
+        c.write("some data 2\n")
+        await asyncio.sleep(1)
+        c.write("some data 2\n")
+        await asyncio.sleep(1)
+        c.write("some data 2\n")
+        c.set_title(f"{c.title} [done]")
+        c.collapse()
+
+    future = asyncio.gather(runner(c1), runner(c2), viewer.run_async())
+    try:
+        asyncio.get_event_loop().run_until_complete(future)
+    finally:
+        viewer.restore()
+
+
+def run_controller_thread_safe():
+    builder = ViewBuilder()
+    c1 = builder.new_controller("runner1", thread_safe=True)
+    c2 = builder.new_controller("runner2", thread_safe=True)
+    viewer = builder.build()
+
+    def runner(c):
+        time.sleep(1)
+        c.write("some data 1\n")
+        time.sleep(1)
+        c.write("some data 2\n")
+        time.sleep(1)
+        c.write("some data 2\n")
+        time.sleep(1)
+        c.write("some data 2\n")
+        c.set_title(f"{c.title} [done]")
+        c.collapse()
+
+    threads = [threading.Thread(target=runner, args=(c,)) for c in [c1, c2]]
+    for t in threads:
+        t.daemon = True
+        t.start()
+    viewer.run()
+
+
 whats = {
     "simple": run_simple,
     "process": run_processes,
     "color": run_colors,
     "dyn": run_dynamic,
     "style": run_style,
+    "control": run_controller,
+    "tcontrol": run_controller_thread_safe,
 }
 
 
@@ -130,12 +186,16 @@ def parse_args():
 
 
 def main():
-    init_logging()
-    args = parse_args()
-    fn = whats.get(args.what, run_simple)
-    iterators = fn()
-    viewer = Viewer(iterators, verbose=True)
-    viewer.run()
+    try:
+        init_logging()
+        args = parse_args()
+        fn = whats.get(args.what, run_simple)
+        result = fn()
+        if isinstance(result, list):
+            viewer = Viewer(result, verbose=True)
+            viewer.run()
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

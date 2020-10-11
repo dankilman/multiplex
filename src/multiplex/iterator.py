@@ -6,6 +6,9 @@ import aiofiles
 from aiostream.stream import create, combine
 from multiplex.actions import SetTitle, Collapse, BoxActions, UpdateMetadata
 from multiplex.ansi import C, RED_RGB, GREEN_RGB
+from multiplex.controller import Controller
+
+STOP = object()
 
 
 async def stream_reader_generator(reader):
@@ -30,6 +33,9 @@ def _extract_title(current_title, obj):
         return current_title
     if isinstance(obj, str):
         return obj
+    title_attr = getattr(obj, "title", None)
+    if title_attr:
+        return title_attr
     name_attr = getattr(obj, "__name__", None)
     if name_attr:
         return name_attr
@@ -123,6 +129,19 @@ def _to_iterator(obj, title):
         inner_type = "path"
         file_path = obj
         obj = g()
+    elif isinstance(obj, Controller):
+
+        async def g():
+            while True:
+                result = await controller.queue.get()
+                if result is STOP:
+                    break
+                yield result
+
+        title = _extract_title(title, obj)
+        inner_type = "controller"
+        controller = obj
+        obj = g()
     else:
         inner_type = "N/A"
     if title is None:
@@ -130,7 +149,7 @@ def _to_iterator(obj, title):
     return obj, title, inner_type
 
 
-def to_iterator(obj, title=None):
+def to_iterator(obj, title=None) -> Iterator:
     result = obj if isinstance(obj, Iterator) else Iterator(obj, title)
     if title is not None and result.title is None:
         result.title = title

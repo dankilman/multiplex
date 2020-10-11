@@ -2,7 +2,7 @@ import sys
 import warnings
 
 import click
-from multiplex import to_iterator, Viewer
+from multiplex.view_builder import ViewBuilder
 
 warnings.simplefilter("ignore")
 
@@ -14,12 +14,12 @@ warnings.simplefilter("ignore")
 def main(process):
     if not process:
         raise click.ClickException("At least one command is required")
-    iterators = []
+    builder = ViewBuilder()
     for p in process:
-        iterators.append(to_iterator(p))
-    viewer = Viewer(iterators)
+        builder.add(p)
+    viewer = builder.build()
     viewer.run()
-    for iterator in iterators:
+    for iterator in builder.iterators:
         exit_code = iterator.metadata.get("exit_code")
         if exit_code:
             sys.exit(exit_code)

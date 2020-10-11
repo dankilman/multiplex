@@ -4,9 +4,18 @@ import os
 from aiostream.test_utils import assert_aiter
 import pytest
 
-from multiplex.iterator import to_iterator, Iterator
+from multiplex import iterator as _iterator
+from multiplex.controller import Controller
+from multiplex.iterator import to_iterator, Iterator, STOP
 
 pytestmark = pytest.mark.asyncio
+
+ACTION = object()
+
+
+@pytest.fixture
+def patch_actions(monkeypatch):
+    monkeypatch.setattr(_iterator, "BoxActions", lambda *_, **__: ACTION)
 
 
 async def test_async_generator_input():
@@ -31,7 +40,7 @@ async def test_generator_input():
     await assert_aiter(iterator.iterator, [0])
 
 
-async def test_async_process_pipe_stdout():
+async def test_async_process_pipe_stdout(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
         cmd="echo 1$HOME; echo 2$HOME",
         stdout=asyncio.subprocess.PIPE,
@@ -43,11 +52,12 @@ async def test_async_process_pipe_stdout():
         iterator.iterator,
         [
             f'1{os.environ.get("HOME")}\n2{os.environ.get("HOME")}\n',
+            ACTION,
         ],
     )
 
 
-async def test_async_process_pipe_stderr():
+async def test_async_process_pipe_stderr(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
         cmd="echo 1$HOME 1>&2",
         stderr=asyncio.subprocess.PIPE,
@@ -59,11 +69,12 @@ async def test_async_process_pipe_stderr():
         iterator.iterator,
         [
             f'1{os.environ.get("HOME")}\n',
+            ACTION,
         ],
     )
 
 
-async def test_async_process_pipe_stdout_stederr():
+async def test_async_process_pipe_stdout_stederr(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
         cmd="echo 1$HOME 1>&2 && echo 2$HOME && echo 3$HOME 1>&2 && sleep 0 && echo 4$HOME;",
         stdout=asyncio.subprocess.PIPE,
@@ -78,11 +89,12 @@ async def test_async_process_pipe_stdout_stederr():
             f'2{os.environ.get("HOME")}\n',
             f'1{os.environ.get("HOME")}\n3{os.environ.get("HOME")}\n',
             f'4{os.environ.get("HOME")}\n',
+            ACTION,
         ],
     )
 
 
-async def test_async_process_pipe_backslash_r():
+async def test_async_process_pipe_backslash_r(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
         cmd=f"printf hello; sleep 0; printf \r; echo goodbye",
         stdout=asyncio.subprocess.PIPE,
@@ -95,6 +107,7 @@ async def test_async_process_pipe_backslash_r():
         [
             "hello",
             "\rgoodbye\n",
+            ACTION,
         ],
     )
 
@@ -161,7 +174,7 @@ async def test_iterable():
     await assert_aiter(iterator.iterator, vals)
 
 
-def test_coroutine():
+def test_coroutine(patch_actions):
     c = asyncio.subprocess.create_subprocess_shell(
         cmd="echo hello",
         stdout=asyncio.subprocess.PIPE,
@@ -171,7 +184,7 @@ def test_coroutine():
     assert iterator.inner_type == "async_process"
 
     async def assertion():
-        await assert_aiter(iterator.iterator, ["hello\n"])
+        await assert_aiter(iterator.iterator, ["hello\n", ACTION])
 
     asyncio.get_event_loop().run_until_complete(assertion())
 
@@ -229,14 +242,42 @@ async def test_path(tmp_path):
     await assert_aiter(iterator.iterator, ["hello\n", "goodbye"])
 
 
-def test_str():
+def test_str(patch_actions):
     cmd = "echo hello"
     iterator = to_iterator(cmd)
     assert iterator.inner_type == "async_process"
     assert iterator.title == cmd
 
     async def assertion():
-        await assert_aiter(iterator.iterator, ["hello\n"])
+        await assert_aiter(iterator.iterator, ["hello\n", ACTION])
+
+    asyncio.get_event_loop().run_until_complete(assertion())
+
+
+async def test_controller():
+    value = "data1"
+    title = "title1"
+    c = Controller(title)
+    c.write(value)
+    c.write(STOP)
+    iterator = to_iterator(c)
+    assert iterator.inner_type == "controller"
+    assert iterator.title == title
+    await assert_aiter(iterator.iterator, [value])
+
+
+def test_controller_thead_safe():
+    value = "data1"
+    title = "title1"
+    c = Controller(title, thread_safe=True)
+    c.write(value)
+    c.write(STOP)
+    iterator = to_iterator(c)
+    assert iterator.inner_type == "controller"
+    assert iterator.title == title
+
+    async def assertion():
+        await assert_aiter(iterator.iterator, [value])
 
     asyncio.get_event_loop().run_until_complete(assertion())
 

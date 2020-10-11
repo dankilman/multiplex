@@ -130,33 +130,39 @@ class Viewer:
     def run(self):
         loop = asyncio.get_event_loop()
         try:
-            keys_input.setup()
-            resize_notifier = resize.setup(loop)
-            ansi.setup()
+            resize_notifier = self._setup()
             loop.run_until_complete(self.run_async(resize_notifier))
         except KeyboardInterrupt:
             pass
         finally:
-            keys_input.restore()
-            resize.restore(loop)
-            ansi.restore()
+            self.restore()
 
     async def run_async(self, resize_notifier=None):
-        loop = asyncio.get_event_loop()
         setup = not resize_notifier
         try:
             if setup:
-                keys_input.setup()
-                resize_notifier = resize.setup(loop)
-                ansi.setup()
+                resize_notifier = self._setup()
             await self._main(resize_notifier)
         except KeyboardInterrupt:
             pass
         finally:
             if setup:
-                keys_input.restore()
-                resize.restore(loop)
-                ansi.restore()
+                self.restore()
+
+    @staticmethod
+    def _setup():
+        loop = asyncio.get_event_loop()
+        keys_input.setup()
+        resize_notifier = resize.setup(loop)
+        ansi.setup()
+        return resize_notifier
+
+    @staticmethod
+    def restore():
+        loop = asyncio.get_event_loop()
+        keys_input.restore()
+        resize.restore(loop)
+        ansi.restore()
 
     async def _main(self, resize_notifier):
         self._init()
