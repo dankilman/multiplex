@@ -26,6 +26,11 @@ class HelpViewState:
         self.viewer = viewer
         self.show = False
         self.current_line = 0
+        self.max_current_line = (
+            2 +  # box lines
+            len(keys.descriptions) * 2 +
+            sum(len(mode_desc) for mode_desc in keys.descriptions.values())
+        ) - 1  # last description new line
 
     def toggle(self):
         self.show = not self.show
@@ -37,7 +42,10 @@ class HelpViewState:
         return True
 
     def move_line_down(self):
-        self.current_line = min(100, self.current_line + 1)
+        max_line = self.max_current_line
+        if self.viewer.lines:
+            max_line -= self.viewer.lines
+        self.current_line = min(max_line, self.current_line + 1)
         return True
 
 
@@ -315,6 +323,9 @@ class Viewer:
         )
 
     def _update_status_bar(self):
+        if self.help.show:
+            return
+
         focused = self.focused
         iterator = self.get_iterator(focused.index)
         title = iterator.title
