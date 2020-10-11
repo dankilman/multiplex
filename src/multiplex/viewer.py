@@ -27,10 +27,11 @@ class HelpViewState:
         self.show = False
         self.current_line = 0
         self.max_current_line = (
-            2 +  # box lines
-            len(keys.descriptions) * 2 +
-            sum(len(mode_desc) for mode_desc in keys.descriptions.values())
-        ) - 1  # last description new line
+            2  # box lines
+            + len(keys.descriptions) * 2
+            - 1  # last description new line
+            + sum(len(mode_desc) for mode_desc in keys.descriptions.values())
+        )
 
     def toggle(self):
         self.show = not self.show
