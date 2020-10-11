@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "multiplex"
+version = "0.1.0"
+description = "View multiple streams in one interface"
+authors = ["Dan Kilman <dankilman@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/dankilman/multiplex"
+repository = "https://github.com/dankilman/multiplex"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+aiostream = "^0.4.1"
+easy-ansi = "^0.3"
+ansicolors = "^1.1.8"
+pyte = "^0.8.0"
+aiofiles = "^0.5.0"
+click = "^7.1.2"
+colorful = "^0.5.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[tool.poetry.scripts]
+mp = "multiplex.main:main"
+
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
