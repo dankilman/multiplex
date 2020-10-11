@@ -54,24 +54,13 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 version = "7.1.2"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "Cross-platform colored terminal text."
-marker = "platform_system == \"Windows\" or sys_platform == \"win32\""
+marker = "sys_platform == \"win32\""
 name = "colorama"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 version = "0.4.3"
-
-[[package]]
-category = "main"
-description = "Terminal string styling done right, in Python."
-name = "colorful"
-optional = false
-python-versions = "*"
-version = "0.5.4"
-
-[package.dependencies]
-colorama = "*"
 
 [[package]]
 category = "main"
@@ -178,7 +167,7 @@ python-versions = "*"
 version = "0.2.5"
 
 [metadata]
-content-hash = "2891e1bfdf820448930699bf81a6ac42dd9a6b30caa4619ecd21e99d3d34c943"
+content-hash = "37da64bd8eb1953bc463daa4ac762825be506a499a05a7d91486403937a3b4ca"
 lock-version = "1.0"
 python-versions = "^3.8"
 
@@ -209,10 +198,6 @@ click = [
 colorama = [
     {file = "colorama-0.4.3-py2.py3-none-any.whl", hash = "sha256:7d73d2a99753107a36ac6b455ee49046802e59d9d076ef8e47b61499fa29afff"},
     {file = "colorama-0.4.3.tar.gz", hash = "sha256:e96da0d330793e2cb9485e9ddfd918d456036c7149416295932478192f4436a1"},
-]
-colorful = [
-    {file = "colorful-0.5.4-py2.py3-none-any.whl", hash = "sha256:8d264b52a39aae4c0ba3e2a46afbaec81b0559a99be0d2cfe2aba4cf94531348"},
-    {file = "colorful-0.5.4.tar.gz", hash = "sha256:86848ad4e2eda60cd2519d8698945d22f6f6551e23e95f3f14dfbb60997807ea"},
 ]
 easy-ansi = [
     {file = "easy-ansi-0.3.tar.gz", hash = "sha256:d7e1b7cc34ec3f0032405925c8ea0713e6f18099ca6abfe3436c99951169361a"},

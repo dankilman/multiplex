@@ -3,9 +3,9 @@ import types
 import pathlib
 
 import aiofiles
-import colorful as cf
 from aiostream.stream import create, combine
 from multiplex.actions import SetTitle, Collapse, BoxActions, UpdateMetadata
+from multiplex.ansi import C, RED_RGB, GREEN_RGB
 
 
 async def stream_reader_generator(reader):
@@ -99,11 +99,11 @@ def _to_iterator(obj, title):
             async for data in stream:
                 yield data
             exit_code = await proc.wait()
-            status = cf.red("✗") if exit_code else cf.green("✓")
+            status = C("✗", fg=RED_RGB) if exit_code else C("✓", fg=GREEN_RGB)
             yield BoxActions(
                 [
                     UpdateMetadata({"exit_code": exit_code}),
-                    SetTitle(f"[{status}] {title}"),
+                    SetTitle(C("[", status, f"] {title}")),
                     Collapse(),
                 ]
             )

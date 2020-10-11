@@ -9,6 +9,7 @@ from multiplex import keys_input
 from multiplex import resize
 from multiplex import commands  # noqa
 from multiplex.actions import BoxAction
+from multiplex.ansi import C, NONE
 from multiplex.box import BoxState, TextBox
 from multiplex.buffer import Buffer
 from multiplex.enums import ViewLocation, BoxLine
@@ -292,12 +293,15 @@ class Viewer:
             suffix = f" [{state}]"
         suffix_len = len(suffix)
         title = iterator.title
-        title_len = ansi.ansilen(title)
+        if not isinstance(title, C):
+            title = C(title)
+        title_len = len(title)
         hr_space = 4
         _ellipsis = "..."
         if hr_space + title_len + suffix_len > self.cols:
-            title = f"{title[:self.cols - suffix_len - len(_ellipsis) - hr_space]}{_ellipsis}"
-        text = f" {title}{suffix} "
+            title = title[: self.cols - suffix_len - len(_ellipsis) - hr_space]
+            title += _ellipsis
+        text = C(" ", title, suffix, " ", fg=NONE, bg=NONE)
 
         logger.debug(f"s{index}:\t{screen_y}\t{location}\t[{self.lines},{self.cols}]")
 
@@ -343,21 +347,24 @@ class Viewer:
         if pending_text:
             pending_text = f"{pending_text} "
 
-        title_len = ansi.ansilen(title)
+        if not isinstance(title, C):
+            title = C(title)
+        title_len = len(title)
         mode_len = len(mode_paren)
         pending_len = len(pending_text)
-        empty = ""
         space_between = self.cols - title_len - mode_len - pending_len
         if space_between < 0:
-            title = f"{title[:(self.cols-mode_len) - 4]}... "
+            _ellipsis = "... "
+            title = title[: (self.cols - mode_len) - len(_ellipsis)]
+            title += _ellipsis
             space_between = 0
-        text = f"{title}{empty:>{space_between}}{pending_text}{mode_paren}"
+        bg = ansi.CYAN_RGB if not auto_scroll else ansi.GRAY1_RGB
+        text = C(title, " " * space_between, pending_text, mode_paren, bg=bg, fg=NONE)
 
         ansi.status_bar(
             uid=-1,
             row=self.get_status_bar_line(),
             text=text,
-            bg=ansi.CYAN_RGB if not auto_scroll else ansi.GRAY1_RGB,
         )
 
     def verify_focused_box_in_view(self):

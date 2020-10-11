@@ -1,6 +1,5 @@
 import io
 
-from colors import ansilen
 from easyansi import screen, cursor, drawing, colors, colors_rgb, attributes
 from easyansi._core.codes import CSI
 
@@ -11,7 +10,7 @@ buffer = io.StringIO()
 
 
 def prnt(text):
-    buffer.write(text)
+    buffer.write(str(text))
 
 
 def flush():
@@ -22,9 +21,13 @@ def flush():
     buffer = io.StringIO()
 
 
-GREEN = colors.GREEN
+NONE = object()
+RESET = colors_rgb.reset_code()
+
 MAGENTA = colors.MAGENTA
 CYAN = colors.CYAN
+RED_RGB = (255, 0, 0)
+GREEN_RGB = (0, 255, 0)
 GRAY1_RGB = (51, 51, 51)
 CYAN_RGB = (0, 200, 200)
 
@@ -86,22 +89,20 @@ def title(row, text, cols, hline_color):
     prnt(screen.clear_line_code(row))
     prnt(colors.color_code(hline_color))
     prnt(drawing.hline_code(1))
-    prnt(colors.reset_code())
+    prnt(RESET)
     prnt(text)
-    prnt(colors.reset_code())
-    offset = 1 + ansilen(text)
+    prnt(RESET)
+    offset = 1 + len(text)
     prnt(colors.color_code(hline_color))
     prnt(drawing.hline_code(cols - offset))
-    prnt(colors.reset_code())
+    prnt(RESET)
 
 
 @cached
-def status_bar(row, text, bg):
+def status_bar(row, text):
     prnt(screen.clear_line_code(row))
-    r, g, b = bg
-    prnt(colors_rgb.color_code(bg_r=r, bg_g=g, bg_b=b))
     prnt(text)
-    prnt(colors.reset_code())
+    prnt(RESET)
 
 
 def help_screen(current_line, lines, cols, descriptions):
@@ -123,7 +124,7 @@ def help_screen(current_line, lines, cols, descriptions):
         help_line.write(attributes.bright_code())
         help_line.write(colors.color_code(colors.MAGENTA))
         help_line.write(mode.capitalize())
-        help_line.write(colors.reset_code())
+        help_line.write(RESET)
         next_line()
         for keys, description in mode_desciptions.items():
             keys_text = ", ".join(str(k) for k in keys)
@@ -134,3 +135,78 @@ def help_screen(current_line, lines, cols, descriptions):
 
     help_lines = help_lines[current_line : current_line + lines - 2]
     prnt("".join(help_lines))
+
+
+class C:
+    def __init__(self, *args, fg=None, bg=None):
+        self.fg = fg
+        self.bg = bg
+        self.parts = []
+        for part in args:
+            self._add(part)
+
+    def copy(self):
+        parts = [p.copy() if isinstance(p, C) else p for p in self.parts]
+        return self.__class__(*parts, fg=self.fg, bg=self.bg)
+
+    def __len__(self):
+        return sum(len(p) for p in self.parts)
+
+    def __str__(self):
+        fg, bg = self.fg, self.bg
+        style = None
+        if fg is NONE and bg is NONE:
+            style = RESET
+            fg, bg = None, None
+        elif fg is NONE:
+            fg = (255, 255, 255)
+        elif bg is NONE:
+            bg = (0, 0, 0)
+
+        if fg or bg:
+            style = colors_rgb.color_code(
+                *(fg or (None, None, None)),
+                *(bg or (None, None, None)),
+            )
+        result = io.StringIO()
+        if style:
+            result.write(style)
+        for part in self.parts:
+            result.write(str(part))
+            if isinstance(part, C) and style:
+                result.write(style)
+        return result.getvalue()
+
+    def __iadd__(self, other):
+        self._add(other)
+        return self
+
+    def __getitem__(self, item):
+        assert isinstance(item, slice)
+        assert not item.start
+        assert not item.step
+        size = item.stop
+        result = self.copy()
+        result._truncate(size)
+        return result
+
+    def _truncate(self, size):
+        new_parts = []
+        for part in self.parts:
+            part_len = len(part)
+            if part_len <= size:
+                new_parts.append(part)
+                size -= part_len
+            else:
+                new_parts.append(part[:size])
+                break
+        self.parts = new_parts
+
+    def _add(self, part):
+        if isinstance(part, C):
+            part = part.copy()
+            if not part.fg:
+                part.fg = self.fg
+            if not part.bg:
+                part.bg = self.bg
+        self.parts.append(part)
