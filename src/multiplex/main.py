@@ -1,7 +1,10 @@
 import sys
+import warnings
 
 import click
 from multiplex import to_iterator, Viewer
+
+warnings.simplefilter("ignore")
 
 
 @click.command()

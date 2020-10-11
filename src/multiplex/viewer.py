@@ -176,6 +176,7 @@ class Viewer:
                 holder.state.box_height = self.box_height
             holder.box = TextBox(self, holder)
         self._update_view()
+        ansi.flush()
 
     def _update_lines_cols(self):
         cols, lines = ansi.get_size()
