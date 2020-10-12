@@ -19,6 +19,8 @@ click = "^7.1.2"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+black = "^20.8b1"
+pytest-asyncio = "^0.14.0"
 
 [tool.poetry.scripts]
 mp = "multiplex.main:main"

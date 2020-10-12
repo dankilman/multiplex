@@ -76,7 +76,7 @@ async def test_async_process_pipe_stderr(patch_actions):
 
 async def test_async_process_pipe_stdout_stederr(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
-        cmd="echo 1$HOME 1>&2 && echo 2$HOME && echo 3$HOME 1>&2 && sleep 0 && echo 4$HOME;",
+        cmd="echo 1$HOME 1>&2 && echo 2$HOME && echo 3$HOME 1>&2 && sleep 0.01 && echo 4$HOME;",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -243,13 +243,13 @@ async def test_path(tmp_path):
 
 
 def test_str(patch_actions):
-    cmd = "echo hello"
+    cmd = "printf hello"
     iterator = to_iterator(cmd)
     assert iterator.inner_type == "async_process"
     assert iterator.title == cmd
 
     async def assertion():
-        await assert_aiter(iterator.iterator, ["hello\r\n", None, ACTION])
+        await assert_aiter(iterator.iterator, ["hello", None, ACTION])
 
     asyncio.get_event_loop().run_until_complete(assertion())
 

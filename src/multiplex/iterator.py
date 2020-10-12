@@ -16,10 +16,13 @@ STOP = object()
 
 async def stream_reader_generator(reader):
     while True:
-        b = await reader.read(1000000)
-        if not b:
-            break
-        yield b.decode()
+        try:
+            b = await reader.read(1000000)
+            if not b:
+                break
+            yield b.decode()
+        except OSError:
+            return
 
 
 class Iterator:
