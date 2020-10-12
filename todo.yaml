@@ -1,24 +1,20 @@
 features:
+- better colors / theming support
+- dynamically add/remove boxes
+- boxes for different commands when running a shell script
 - show/hide status bar
 - show/hide title on maxmize
 - add save output to dir/tar/... (support tail mode for files/fds)
-- better colors / theming support
-- count arg
-- show line numbers
 - configurable keyboard bindings
 - add search
 - visual mode to copy text to clipboard
-- grid/custom layouts
 - tabs
-- dynamically add/remove boxes
 - box nesting
-- boxes for different commands when running a shell script
-- use uvloop
+- grid/custom layouts
+- show line numbers
+- count arg
 
 tasks:
 - benchmark hot spots and optimize - worst case now is during resize
-
-tests:
-- test with real processes - colors, progress bars, etc...
 
 docs: []
