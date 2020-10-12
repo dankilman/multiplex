@@ -15,7 +15,7 @@ python-versions = "*"
 version = "0.4.1"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "ANSI colors for Python"
 name = "ansicolors"
 optional = false
@@ -297,7 +297,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=3.5,<3.7.3 || >3.7.3)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "jaraco.test (>=3.2.0)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
 
 [metadata]
-content-hash = "639b11b47467a1b156d788df65b11647a5172d9cf64840c0956f4590c0ba71d4"
+content-hash = "455354e02d3bcc207d223d938bc371eab36324913b413d09d760732edf4230ec"
 lock-version = "1.0"
 python-versions = "^3.7"
 
