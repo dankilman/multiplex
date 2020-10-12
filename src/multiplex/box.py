@@ -55,7 +55,6 @@ class TextBox:
         )
 
         ansi.text_box(
-            uid=self.holder.id,
             from_row=screen_y_1,
             to_row=screen_y_2,
             text=text,

@@ -322,7 +322,6 @@ class Viewer:
         logger.debug(f"s{index}:\t{screen_y}\t{location}\t[{self.lines},{self.cols}]")
 
         ansi.title(
-            uid=self.get_holder(index).id,
             row=screen_y,
             text=text,
             hline_color=ansi.CYAN if index == self.current_focused_box else ansi.MAGENTA,
@@ -381,7 +380,6 @@ class Viewer:
         text = C(title, " " * space_between, pending_text, mode_paren, bg=bg, fg=NONE)
 
         ansi.status_bar(
-            uid=-1,
             row=self.get_status_bar_line(),
             text=text,
         )

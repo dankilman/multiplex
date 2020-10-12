@@ -55,36 +55,16 @@ def get_size():
     return screen.get_size()
 
 
-def cached(fn):
-    cache = {}
-
-    def wrapper(uid, *args, **kwargs):
-        cache_key = (args, kwargs)
-        if cache.get(uid) == cache_key:
-            return
-        fn(*args, **kwargs)
-        cache[uid] = cache_key
-
-    wrapper.clear = lambda: cache.clear()
-
-    return wrapper
-
-
 def clear():
-    text_box.clear()
-    title.clear()
-    status_bar.clear()
     prnt(screen.clear_code())
 
 
-@cached
 def text_box(from_row, to_row, text):
     for line_num in range(to_row, from_row - 1, -1):
         prnt(screen.clear_line_code(line_num))
     prnt(text)
 
 
-@cached
 def title(row, text, cols, hline_color):
     prnt(screen.clear_line_code(row))
     prnt(colors.color_code(hline_color))
@@ -98,7 +78,6 @@ def title(row, text, cols, hline_color):
     prnt(RESET)
 
 
-@cached
 def status_bar(row, text):
     prnt(screen.clear_line_code(row))
     prnt(text)
