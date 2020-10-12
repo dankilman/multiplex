@@ -9,7 +9,7 @@ homepage = "https://github.com/dankilman/multiplex"
 repository = "https://github.com/dankilman/multiplex"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.7"
 aiostream = "^0.4.1"
 easy-ansi = "^0.3"
 ansicolors = "^1.1.8"
