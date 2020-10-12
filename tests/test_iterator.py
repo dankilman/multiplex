@@ -254,6 +254,23 @@ def test_str(patch_actions):
     asyncio.get_event_loop().run_until_complete(assertion())
 
 
+def test_setsize(patch_actions, monkeypatch):
+    cols = 100
+    rows = 50
+    monkeypatch.setenv("COLUMNS", str(cols))
+    monkeypatch.setenv("LINES", str(rows))
+
+    cmd = "stty size"
+    iterator = to_iterator(cmd)
+    assert iterator.inner_type == "async_process"
+    assert iterator.title == cmd
+
+    async def assertion():
+        await assert_aiter(iterator.iterator, [f"{rows} {cols}\r\n", None, ACTION])
+
+    asyncio.get_event_loop().run_until_complete(assertion())
+
+
 async def test_controller():
     value = "data1"
     title = "title1"

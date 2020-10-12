@@ -1,12 +1,16 @@
 import asyncio
+import fcntl
 import io
 import os
+import struct
+import termios
 import types
 import pathlib
 import pty
 
 import aiofiles
 from aiostream.stream import create, combine
+from multiplex import ansi
 from multiplex.actions import SetTitle, BoxActions, UpdateMetadata, Collapse
 from multiplex.ansi import C, RED_RGB, GREEN_RGB
 from multiplex.controller import Controller
@@ -53,15 +57,23 @@ def _extract_title(current_title, obj):
     return None
 
 
+def _setsize(fd, rows=0, cols=0):
+    if not (rows and cols):
+        cols, rows = ansi.get_size()
+    s = struct.pack("HHHH", rows, cols, 0, 0)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, s)
+
+
 def _to_iterator(obj, title):
     master, slave = None, None
 
     if isinstance(obj, str):
         title = _extract_title(title, obj)
         master, slave = pty.openpty()
+        _setsize(slave)
         obj = asyncio.subprocess.create_subprocess_shell(
             obj,
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=slave,
             stdout=slave,
             stderr=slave,
         )
