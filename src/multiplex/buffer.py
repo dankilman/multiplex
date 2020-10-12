@@ -43,6 +43,7 @@ class Screen(pyte.Screen):
         self.dirty.clear()
         self.columns = original_columns
         self.lines = original_lines
+        self.tabstops = set(range(8, self.columns, 8))
 
     @property
     def default_char(self):
