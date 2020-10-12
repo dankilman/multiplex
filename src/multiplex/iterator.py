@@ -7,7 +7,7 @@ import pty
 
 import aiofiles
 from aiostream.stream import create, combine
-from multiplex.actions import SetTitle, BoxActions, UpdateMetadata
+from multiplex.actions import SetTitle, BoxActions, UpdateMetadata, Collapse
 from multiplex.ansi import C, RED_RGB, GREEN_RGB
 from multiplex.controller import Controller
 
@@ -133,7 +133,7 @@ def _to_iterator(obj, title):
                 [
                     UpdateMetadata({"exit_code": exit_code}),
                     SetTitle(C("[", status, f"] {title}")),
-                    # Collapse(),
+                    Collapse(),
                 ]
             )
 

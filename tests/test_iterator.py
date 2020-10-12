@@ -249,7 +249,7 @@ def test_str(patch_actions):
     assert iterator.title == cmd
 
     async def assertion():
-        await assert_aiter(iterator.iterator, ["hello\n", ACTION])
+        await assert_aiter(iterator.iterator, ["hello\r\n", None, ACTION])
 
     asyncio.get_event_loop().run_until_complete(assertion())
 
