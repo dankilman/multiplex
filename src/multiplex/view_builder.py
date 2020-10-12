@@ -6,11 +6,12 @@ from multiplex.controller import Controller
 
 
 class ViewBuilder:
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.iterators: List[Iterator] = []
+        self.verbose = verbose
 
     def build(self):
-        return Viewer(self.iterators)
+        return Viewer(self.iterators, verbose=self.verbose)
 
     def add(self, obj):
         self.iterators.append(to_iterator(obj))

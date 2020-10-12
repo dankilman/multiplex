@@ -10,11 +10,12 @@ warnings.simplefilter("ignore")
 @click.command()
 @click.argument("process", nargs=-1)
 @click.help_option("-h", "--help")
-@click.version_option(None, "-v", "--version")
-def main(process):
+@click.version_option(None, "--version")
+@click.option("-v", "--verbose", is_flag=True)
+def main(process, verbose):
     if not process:
         raise click.ClickException("At least one command is required")
-    builder = ViewBuilder()
+    builder = ViewBuilder(verbose=verbose)
     for p in process:
         builder.add(p)
     viewer = builder.build()

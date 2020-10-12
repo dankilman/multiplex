@@ -1,10 +1,13 @@
 import asyncio
+import io
+import os
 import types
 import pathlib
+import pty
 
 import aiofiles
 from aiostream.stream import create, combine
-from multiplex.actions import SetTitle, Collapse, BoxActions, UpdateMetadata
+from multiplex.actions import SetTitle, BoxActions, UpdateMetadata
 from multiplex.ansi import C, RED_RGB, GREEN_RGB
 from multiplex.controller import Controller
 
@@ -48,12 +51,15 @@ def _extract_title(current_title, obj):
 
 
 def _to_iterator(obj, title):
+    master, slave = None, None
+
     if isinstance(obj, str):
         title = _extract_title(title, obj)
+        master, slave = pty.openpty()
         obj = asyncio.subprocess.create_subprocess_shell(
             obj,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=slave,
+            stderr=slave,
         )
 
     if isinstance(obj, types.FunctionType):
@@ -97,20 +103,37 @@ def _to_iterator(obj, title):
                 streams.append(stream_reader_generator(stdout))
             if isinstance(stderr, asyncio.streams.StreamReader):
                 streams.append(stream_reader_generator(stderr))
+            if master:
+                assert slave
+                reader_pipe = io.open(master, "rb", 0)
+                reader = asyncio.StreamReader()
+                reader_protocol = asyncio.StreamReaderProtocol(reader)
+                await asyncio.get_running_loop().connect_read_pipe(lambda: reader_protocol, reader_pipe)
+                streams.append(stream_reader_generator(reader))
+
+                async def exit_stream():
+                    await proc.wait()
+                    if slave:
+                        os.close(slave)
+                    yield
+
+                streams.append(exit_stream())
+
             assert streams
+
             if len(streams) == 1:
                 stream = streams[0]
             else:
                 stream = combine.merge(*streams)
             async for data in stream:
                 yield data
-            exit_code = await proc.wait()
+            exit_code = proc.returncode if slave else await proc.wait()
             status = C("✗", fg=RED_RGB) if exit_code else C("✓", fg=GREEN_RGB)
             yield BoxActions(
                 [
                     UpdateMetadata({"exit_code": exit_code}),
                     SetTitle(C("[", status, f"] {title}")),
-                    Collapse(),
+                    # Collapse(),
                 ]
             )
 
