@@ -61,6 +61,7 @@ def _to_iterator(obj, title):
         master, slave = pty.openpty()
         obj = asyncio.subprocess.create_subprocess_shell(
             obj,
+            stdin=asyncio.subprocess.DEVNULL,
             stdout=slave,
             stderr=slave,
         )
@@ -136,7 +137,7 @@ def _to_iterator(obj, title):
                 [
                     UpdateMetadata({"exit_code": exit_code}),
                     SetTitle(C("[", status, f"] {title}")),
-                    Collapse(),
+                    # Collapse(),
                 ]
             )
 
