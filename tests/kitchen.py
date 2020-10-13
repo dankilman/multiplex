@@ -10,10 +10,9 @@ from colors.colors import _color_code as cc
 
 
 from multiplex import ansi
+from multiplex import Viewer, Multiplex, Controller
 from multiplex.iterator import Iterator
-from multiplex import Viewer
 from multiplex.logging import init_logging
-from multiplex.view_builder import ViewBuilder
 
 
 def run_simple():
@@ -119,10 +118,11 @@ def run_processes():
 
 
 def run_controller():
-    builder = ViewBuilder()
-    c1 = builder.new_controller("runner1")
-    c2 = builder.new_controller("runner2")
-    viewer = builder.build()
+    multplex = Multiplex()
+    c1 = Controller("runner1")
+    c2 = Controller("runner2")
+    multplex.add(c1)
+    multplex.add(c2)
 
     async def runner(c):
         await asyncio.sleep(1)
@@ -136,18 +136,19 @@ def run_controller():
         c.set_title(f"{c.title} [done]")
         c.collapse()
 
-    future = asyncio.gather(runner(c1), runner(c2), viewer.run_async())
+    future = asyncio.gather(runner(c1), runner(c2), multplex.run_async())
     try:
         asyncio.get_event_loop().run_until_complete(future)
     finally:
-        viewer.restore()
+        multplex.viewer.restore()
 
 
 def run_controller_thread_safe():
-    builder = ViewBuilder()
-    c1 = builder.new_controller("runner1", thread_safe=True)
-    c2 = builder.new_controller("runner2", thread_safe=True)
-    viewer = builder.build()
+    multiplex = Multiplex()
+    c1 = Controller("runner1", thread_safe=True)
+    c2 = Controller("runner2", thread_safe=True)
+    multiplex.add(c1)
+    multiplex.add(c2)
 
     def runner(c):
         time.sleep(1)
@@ -165,7 +166,48 @@ def run_controller_thread_safe():
     for t in threads:
         t.daemon = True
         t.start()
-    viewer.run()
+    multiplex.run()
+
+
+def run_live():
+    # def obj():
+    #     yield "hello"
+    obj = "echo $RANDOM; sleep 5; echo $RANDOM"
+
+    multi = Multiplex(box_height=3)
+
+    async def runner():
+        while not multi.viewer or not multi.viewer.stopped:
+            await multi.add_async(obj)
+            await asyncio.sleep(0.1)
+
+    future = asyncio.gather(runner(), multi.run_async())
+    try:
+        asyncio.get_event_loop().run_until_complete(future)
+    finally:
+        if multi.viewer and not multi.viewer.stopped:
+            multi.viewer.restore()
+
+
+def run_live_thread_safe():
+    def obj():
+        yield "hello"
+
+    multi = Multiplex(box_height=3)
+
+    loop = asyncio.get_event_loop()
+
+    def runner(_):
+        asyncio.set_event_loop(loop)
+        while not multi.viewer or not multi.viewer.stopped:
+            multi.add(obj, thread_safe=True)
+            time.sleep(1)
+
+    threads = [threading.Thread(target=runner, args=(c,)) for c in [1]]
+    for t in threads:
+        t.daemon = True
+        t.start()
+    multi.run()
 
 
 whats = {
@@ -176,6 +218,8 @@ whats = {
     "style": run_style,
     "control": run_controller,
     "tcontrol": run_controller_thread_safe,
+    "live": run_live,
+    "tlive": run_live_thread_safe,
 }
 
 

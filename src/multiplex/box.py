@@ -1,13 +1,24 @@
 import logging
 
 from multiplex import ansi
+from multiplex.buffer import Buffer
 from multiplex.enums import ViewLocation
 
 logger = logging.getLogger("multiplex.box")
 
 
+class BoxHolder:
+    def __init__(self, index, iterator, box_height, viewer):
+        self.id = id(self)
+        self.index = index
+        self.iterator = iterator
+        self.buffer = Buffer()
+        self.state = BoxState(box_height)
+        self.box = TextBox(viewer, self)
+
+
 class BoxState:
-    def __init__(self):
+    def __init__(self, box_height):
         self.wrap = True
         self.auto_scroll = True
         self.collapsed = False
@@ -15,8 +26,8 @@ class BoxState:
         self.first_column = 0
         self.view_longest_line = 0
         self.text = None
-        self.changed_height = False
-        self.box_height = None
+        self.changed_height = box_height is not None
+        self.box_height = box_height
 
 
 class TextBox:

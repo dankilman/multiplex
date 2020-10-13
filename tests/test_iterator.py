@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+from aiostream import streamcontext
 from aiostream.test_utils import assert_aiter
 import pytest
 
@@ -11,6 +12,14 @@ from multiplex.iterator import to_iterator, Iterator, STOP, to_iterator_async
 pytestmark = pytest.mark.asyncio
 
 ACTION = object()
+
+
+async def collect(source):
+    result = []
+    async with streamcontext(source) as streamer:
+        async for item in streamer:
+            result.append(item)
+    return result
 
 
 @pytest.fixture
@@ -76,22 +85,22 @@ async def test_async_process_pipe_stderr(patch_actions):
 
 async def test_async_process_pipe_stdout_stederr(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
-        cmd="echo 1$HOME 1>&2 && echo 2$HOME && echo 3$HOME 1>&2 && sleep 0.01 && echo 4$HOME;",
+        cmd="""
+            printf 1 1>&2 && \
+            sleep 0.01 && \
+            printf 2 && \
+            sleep 0.01 && \
+            printf 3 1>&2 && \
+            sleep 0.01 && \
+            printf 4 
+        """,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     iterator = to_iterator(p)
     assert iterator.title == "Process"
     assert iterator.inner_type == "async_process"
-    await assert_aiter(
-        iterator.iterator,
-        [
-            f'2{os.environ.get("HOME")}\n',
-            f'1{os.environ.get("HOME")}\n3{os.environ.get("HOME")}\n',
-            f'4{os.environ.get("HOME")}\n',
-            ACTION,
-        ],
-    )
+    await assert_aiter(iterator.iterator, ["1", "2", "3", "4", ACTION])
 
 
 async def test_async_process_pipe_backslash_r(patch_actions):
@@ -285,7 +294,8 @@ def test_setsize(patch_actions, monkeypatch):
     assert iterator.title == cmd
 
     async def assertion():
-        await assert_aiter(iterator.iterator, [f"{rows} {cols}\r\n", None, ACTION])
+        items = await collect(iterator.iterator)
+        assert items[0].strip() == f"{rows} {cols}"
 
     asyncio.get_event_loop().run_until_complete(assertion())
 

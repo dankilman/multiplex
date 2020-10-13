@@ -1,23 +1,13 @@
-import asyncio
 import signal
 
-RESIZE = object()
+from multiplex.refs import REDRAW
 
 
-def setup(loop):
-    queue = asyncio.Queue()
-
+def setup(viewer_events, loop):
     def sigwinch():
-        queue.put_nowait(True)
+        viewer_events.send((REDRAW, None))
 
     loop.add_signal_handler(signal.SIGWINCH, sigwinch)
-
-    async def gen():
-        while True:
-            await queue.get()
-            yield RESIZE, None
-
-    return gen()
 
 
 def restore(loop):

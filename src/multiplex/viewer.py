@@ -10,79 +10,64 @@ from multiplex import resize
 from multiplex import commands  # noqa
 from multiplex.actions import BoxAction
 from multiplex.ansi import C, NONE
-from multiplex.box import BoxState, TextBox
-from multiplex.buffer import Buffer
+from multiplex.box import BoxHolder
 from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
-from multiplex.iterator import to_iterator
+from multiplex.help import HelpViewState
+from multiplex.refs import REDRAW
 
 logger = logging.getLogger("multiplex.view")
 
 MIN_BOX_HEIGHT = 7
 
 
-class HelpViewState:
-    def __init__(self, viewer):
-        self.viewer = viewer
-        self.show = False
-        self.current_line = 0
-        self.max_current_line = (
-            2  # box lines
-            + len(keys.descriptions) * 2
-            - 1  # last description new line
-            + sum(len(mode_desc) for mode_desc in keys.descriptions.values())
-        )
+class ViewerEvents:
+    def __init__(self):
+        self.queue = asyncio.Queue()
 
-    def toggle(self):
-        self.show = not self.show
-        self.current_line = 0
-        return ansi.FULL_REFRESH
+    async def receive(self):
+        while True:
+            yield await self.queue.get()
 
-    def move_line_up(self):
-        self.current_line = max(0, self.current_line - 1)
-        return True
-
-    def move_line_down(self):
-        max_line = self.max_current_line
-        if self.viewer.lines:
-            max_line -= self.viewer.lines
-        self.current_line = min(max_line, self.current_line + 1)
-        return True
-
-
-class BoxHolder:
-    def __init__(self, index, iterator, buffer, state):
-        self.id = id(self)
-        self.index = index
-        self.iterator = iterator
-        self.buffer = buffer
-        self.state = state
-        self.box = None
+    def send(self, message):
+        self.queue.put_nowait(message)
 
 
 class Viewer:
     def __init__(self, iterators, box_height=None, verbose=False):
-        self.verbose = verbose
-        self.holders = [
-            BoxHolder(
-                index=i,
-                iterator=to_iterator(iterator),
-                buffer=Buffer(),
-                state=BoxState(),
-            )
-            for i, iterator in enumerate(iterators)
-        ]
-        self.num_boxes = len(self.holders)
+        self.holders = []
         self.input_reader = keys_input.InputReader(viewer=self, bindings=keys.bindings)
+        self.iterators_queue = asyncio.Queue()
+        self.help = HelpViewState(self)
+        self.events = ViewerEvents()
         self.box_height = box_height
+        self.verbose = verbose
         self.current_focused_box = 0
         self.current_view_line = 0
         self.maximized = False
         self.collaped_all = False
         self.wrapped_all = False
-        self.help = HelpViewState(self)
         self.cols = None
         self.lines = None
+        self.stopped = False
+        for iterator in iterators:
+            self.add(iterator, redraw=False)
+
+    def add(self, iterator, thread_safe=False, redraw=True):
+        box_height = iterator.box_height or self.box_height
+        index = self.num_boxes
+
+        def action():
+            holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
+            self.holders.append(holder)
+            self.iterators_queue.put_nowait((index, iterator))
+            if redraw:
+                self.events.send((REDRAW, None))
+
+        if thread_safe:
+            asyncio.get_event_loop().call_soon_threadsafe(action)
+        else:
+            action()
 
     def swap_indices(self, index1, index2):
         holder1 = self.get_holder(index1)
@@ -95,6 +80,10 @@ class Viewer:
             self.current_focused_box = index2
         elif self.current_focused_box == index2:
             self.current_focused_box = index1
+
+    @property
+    def num_boxes(self):
+        return len(self.holders)
 
     @property
     def iterators(self):
@@ -128,32 +117,31 @@ class Viewer:
         return self.holders[index].box
 
     def run(self):
-        loop = asyncio.get_event_loop()
         try:
-            resize_notifier = self._setup()
-            loop.run_until_complete(self.run_async(resize_notifier))
+            self._setup()
+            asyncio.get_event_loop().run_until_complete(self.run_async(_setup=False))
         except KeyboardInterrupt:
             pass
         finally:
+            self.stopped = True
             self.restore()
 
-    async def run_async(self, resize_notifier=None):
-        setup = not resize_notifier
+    async def run_async(self, _setup=True):
         try:
-            if setup:
-                resize_notifier = self._setup()
-            await self._main(resize_notifier)
+            if _setup:
+                self._setup()
+            await self._main()
         except KeyboardInterrupt:
             pass
         finally:
-            if setup:
+            if _setup:
+                self.stopped = True
                 self.restore()
 
-    @staticmethod
-    def _setup():
+    def _setup(self):
         loop = asyncio.get_event_loop()
         keys_input.setup()
-        resize_notifier = resize.setup(loop)
+        resize_notifier = resize.setup(self.events, loop)
         ansi.setup()
         return resize_notifier
 
@@ -164,18 +152,21 @@ class Viewer:
         resize.restore(loop)
         ansi.restore()
 
-    async def _main(self, resize_notifier):
+    async def _main(self):
         self._init()
 
         async def wrapped_iterator(holder, it):
             async for elem in it:
                 yield holder, elem
 
-        iterators = [iterator.iterator for iterator in self.iterators]
-        iterators = [wrapped_iterator(self.get_holder(i), it) for i, it in enumerate(iterators)]
-        merged = aiostream.stream.merge(*iterators, self.input_reader.read(), resize_notifier)
+        async def sources():
+            yield self.input_reader.read()
+            yield self.events.receive()
+            while True:
+                index, iterator = await self.iterators_queue.get()
+                yield wrapped_iterator(self.get_holder(index), iterator.iterator)
 
-        async with merged.stream() as streamer:
+        async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
             async for obj, output in streamer:
                 try:
                     self._handle_event(obj, output)
@@ -184,12 +175,14 @@ class Viewer:
 
     def _init(self):
         self._update_lines_cols()
-        self.box_height = max(MIN_BOX_HEIGHT, (self.lines - self.num_boxes - 1) // self.num_boxes)
+        if not self.holders:
+            return
+        ansi.clear()
+        default_box_height = max(MIN_BOX_HEIGHT, (self.lines - self.num_boxes - 1) // self.num_boxes)
         for holder in self.holders:
             holder.buffer.width = self.cols
             if not holder.state.changed_height:
-                holder.state.box_height = self.box_height
-            holder.box = TextBox(self, holder)
+                holder.state.box_height = default_box_height
         self._update_view()
         ansi.flush()
 
@@ -205,10 +198,10 @@ class Viewer:
         return changed
 
     def _handle_event(self, obj, output):
-        if obj is resize.RESIZE:
-            ansi.clear()
+        if obj is REDRAW:
             self._init()
-        elif isinstance(obj, BoxHolder):
+            return
+        if isinstance(obj, BoxHolder):
             self._update_box(obj.index, output)
             if isinstance(output, BoxAction):
                 ansi.clear()
