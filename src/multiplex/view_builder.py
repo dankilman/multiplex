@@ -1,7 +1,7 @@
 from typing import List
 
 from multiplex import Viewer
-from multiplex.iterator import Iterator, to_iterator
+from multiplex.iterator import Iterator, to_iterator, to_iterator_async
 from multiplex.controller import Controller
 
 
@@ -15,6 +15,9 @@ class ViewBuilder:
 
     def add(self, obj):
         self.iterators.append(to_iterator(obj))
+
+    async def add_async(self, obj):
+        self.iterators.append(await to_iterator_async(obj))
 
     def new_controller(self, title=None, thread_safe=False, loop=None) -> Controller:
         result = Controller(

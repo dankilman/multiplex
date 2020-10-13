@@ -30,8 +30,8 @@ async def stream_reader_generator(reader):
 
 
 class Iterator:
-    def __init__(self, iterator, title=None):
-        iterator, title, inner_type = _to_iterator(iterator, title)
+    def __init__(self, iterator, title=None, _internal_iterator=None):
+        iterator, title, inner_type = _internal_iterator or _to_iterator(iterator, title)
         self.iterator = iterator
         self.title = title
         self.inner_type = inner_type
@@ -78,7 +78,7 @@ def _str_to_iterator(str_value, title):
 def _coroutine_to_iterator(cor):
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        raise RuntimeError("Iterators cannot be created from coroutines when the event loop is already running")
+        raise RuntimeError("Event loop is current running. Use the async version")
     return loop.run_until_complete(cor)
 
 
@@ -196,17 +196,28 @@ def _callable_to_iterator(cb, title):
     return obj, title
 
 
-def _to_iterator(obj, title):
+def _to_iterator_part1(obj, title):
     master, slave = None, None
     if isinstance(obj, str):
         obj, title, (master, slave) = _str_to_iterator(obj, title)
-
-    if isinstance(obj, (types.FunctionType, types.MethodType)):
+    elif isinstance(obj, (types.FunctionType, types.MethodType)):
         obj, title = _callable_to_iterator(obj, title)
+    return obj, title, master, slave
 
+
+def _to_iterator_part2(obj):
     if isinstance(obj, types.CoroutineType):
         obj = _coroutine_to_iterator(obj)
+    return obj
 
+
+async def _to_iterator_part2_async(obj):
+    if isinstance(obj, types.CoroutineType):
+        obj = await obj
+    return obj
+
+
+def _to_iterator_part3(obj, title, master, slave):
     inner_type = "N/A"
     if isinstance(obj, asyncio.streams.StreamReader):
         obj, title, inner_type = _stream_reader_to_iterator(obj, title)
@@ -231,5 +242,27 @@ def _to_iterator(obj, title):
     return obj, title, inner_type
 
 
+def _to_iterator(obj, title):
+    obj, title, master, slave = _to_iterator_part1(obj, title)
+    obj = _to_iterator_part2(obj)
+    obj, title, inner_type = _to_iterator_part3(obj, title, master, slave)
+    return obj, title, inner_type
+
+
+async def _to_iterator_async(obj, title):
+    obj, title, master, slave = _to_iterator_part1(obj, title)
+    obj = await _to_iterator_part2_async(obj)
+    obj, title, inner_type = _to_iterator_part3(obj, title, master, slave)
+    return obj, title, inner_type
+
+
 def to_iterator(obj, title=None) -> Iterator:
     return obj if isinstance(obj, Iterator) else Iterator(obj, title)
+
+
+async def to_iterator_async(obj, title=None) -> Iterator:
+    return (
+        obj
+        if isinstance(obj, Iterator)
+        else Iterator(obj, title, _internal_iterator=await _to_iterator_async(obj, title))
+    )

@@ -6,7 +6,7 @@ import pytest
 
 from multiplex import iterator as _iterator
 from multiplex.controller import Controller
-from multiplex.iterator import to_iterator, Iterator, STOP
+from multiplex.iterator import to_iterator, Iterator, STOP, to_iterator_async
 
 pytestmark = pytest.mark.asyncio
 
@@ -189,6 +189,17 @@ def test_coroutine(patch_actions):
     asyncio.get_event_loop().run_until_complete(assertion())
 
 
+async def test_coroutine_async(patch_actions):
+    c = asyncio.subprocess.create_subprocess_shell(
+        cmd="echo hello",
+        stdout=asyncio.subprocess.PIPE,
+    )
+    iterator = await to_iterator_async(c)
+    assert iterator.title == "Process"
+    assert iterator.inner_type == "async_process"
+    await assert_aiter(iterator.iterator, ["hello\n", ACTION])
+
+
 async def test_function():
     async def fn():
         yield "1"
@@ -252,6 +263,14 @@ def test_str(patch_actions):
         await assert_aiter(iterator.iterator, ["hello", None, ACTION])
 
     asyncio.get_event_loop().run_until_complete(assertion())
+
+
+async def test_str_async(patch_actions):
+    cmd = "printf hello"
+    iterator = await to_iterator_async(cmd)
+    assert iterator.inner_type == "async_process"
+    assert iterator.title == cmd
+    await assert_aiter(iterator.iterator, ["hello", None, ACTION])
 
 
 def test_setsize(patch_actions, monkeypatch):
