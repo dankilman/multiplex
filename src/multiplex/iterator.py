@@ -36,6 +36,7 @@ class Iterator:
         self.title = title
         self.inner_type = inner_type
         self.metadata = {}
+        self.box_height = None
 
 
 def _extract_title(current_title, obj):
