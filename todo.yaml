@@ -1,20 +1,5 @@
-features:
-- better colors / theming support
+- better colors (maybe theming support)
 - dynamically add/remove boxes
 - boxes for different commands when running a shell script
-- show/hide status bar
-- show/hide title on maxmize
 - add save output to dir/tar/... (support tail mode for files/fds)
-- configurable keyboard bindings
-- add search
-- visual mode to copy text to clipboard
-- tabs
-- box nesting
-- grid/custom layouts
-- show line numbers
-- count arg
-
-tasks:
-- benchmark hot spots and optimize - worst case now is during resize
-
-docs: []
+- documentation
