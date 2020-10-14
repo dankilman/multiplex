@@ -1,4 +1,4 @@
 from .controller import Controller
-from .iterator import to_iterator, to_iterator_async
+from .iterator import to_iterator
 from .viewer import Viewer
 from .multiplex import Multiplex
