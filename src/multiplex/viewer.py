@@ -28,6 +28,7 @@ class ViewerEvents:
     async def receive(self):
         while True:
             yield await self.queue.get()
+            self.queue.task_done()
 
     def send(self, message):
         self.queue.put_nowait(message)
@@ -165,6 +166,7 @@ class Viewer:
             while True:
                 index, iterator = await self.iterators_queue.get()
                 yield wrapped_iterator(self.get_holder(index), iterator.iterator)
+                self.iterators_queue.task_done()
 
         async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
             async for obj, output in streamer:

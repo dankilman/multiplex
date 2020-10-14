@@ -149,6 +149,7 @@ def _controller_to_iterator(controller, title):
             if result is STOP:
                 break
             yield result
+            controller.queue.task_done()
 
     obj = g()
     title = _extract_title(title, controller)
