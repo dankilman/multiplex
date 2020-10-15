@@ -156,9 +156,10 @@ class C:
                 result.write(style)
         return result.getvalue()
 
-    def __iadd__(self, other):
-        self._add(other)
-        return self
+    def __add__(self, other):
+        copy = self.copy()
+        copy._add(other)
+        return copy
 
     def __getitem__(self, item):
         assert isinstance(item, slice)

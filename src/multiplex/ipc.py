@@ -6,6 +6,7 @@ from asyncio import StreamWriter, StreamReader
 from random import randint
 
 from multiplex import Viewer
+from multiplex.iterator import Descriptor, MULTIPLEX_SOCKET_PATH
 
 
 class Server:
@@ -33,24 +34,51 @@ class Server:
 
     async def _handle_request(self, reader: StreamReader, writer: StreamWriter):
         request = await _read_message(reader)
-        response = await self._handle_message(request)
-        await _write_message(response, writer)
+        self._handle_message(request)
+        await _write_message({"status": "success"}, writer)
         writer.close()
 
-    async def _handle_message(self, message):
-        action = message.get("action")
+    def _handle_message(self, message):
+        action = message.pop("action")
         if action == "split":
-            self.viewer.restore()
-        return {"hello": "there"}
+            self.viewer.split(**message)
+        elif action == "collapse":
+            self.viewer.focused.toggle_collapse(**message)
+            self.viewer.events.send_redraw()
+        elif action == "add":
+            self.viewer.add(Descriptor(**message))
+        elif action == "batch":
+            for action in message["actions"]:
+                self._handle_message(action)
 
 
 class Client:
     def __init__(self, socket_path):
         self._socket_path = socket_path
 
-    async def split(self):
-        response = await self._request({"action": "split"})
-        print(response)
+    async def add(self, obj, title, box_height):
+        await self._request(self.add_request_body(obj, title, box_height))
+
+    @staticmethod
+    def add_request_body(obj, title, box_height):
+        return {"action": "add", "obj": obj, "title": title, "box_height": box_height}
+
+    async def split(self, title, box_height):
+        await self._request(self.split_request_body(title, box_height))
+
+    @staticmethod
+    def split_request_body(title, box_height):
+        return {"action": "split", "title": title, "box_height": box_height}
+
+    async def toggle_collapse(self, value=None):
+        await self._request(self.collapse_request_body(value))
+
+    @staticmethod
+    def collapse_request_body(value):
+        return {"action": "collapse", "value": value}
+
+    async def batch(self, actions):
+        await self._request({"action": "batch", "actions": actions})
 
     async def _connect(self):
         return await asyncio.open_unix_connection(self._socket_path)
@@ -70,3 +98,7 @@ async def _read_message(reader):
 async def _write_message(message, writer):
     writer.write(f"{json.dumps(message)}\n".encode())
     await writer.drain()
+
+
+def get_env_socket_path():
+    return os.environ.get(MULTIPLEX_SOCKET_PATH)

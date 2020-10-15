@@ -24,7 +24,12 @@ class Multiplex:
 
     async def run_async(self):
         assert not self.viewer
-        self.viewer = Viewer(self.descriptors, verbose=self.verbose, box_height=self.box_height)
+        self.viewer = Viewer(
+            descriptors=self.descriptors,
+            verbose=self.verbose,
+            box_height=self.box_height,
+            socket_path=self.server.socket_path,
+        )
         await self.server.start(viewer=self.viewer)
         try:
             await self.viewer.run()
