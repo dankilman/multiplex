@@ -19,7 +19,7 @@ def main(process, verbose):
     for p in process:
         multiplex.add(p)
     multiplex.run()
-    for iterator in multiplex.iterators:
+    for iterator in multiplex.viewer.iterators:
         exit_code = iterator.metadata.get("exit_code")
         if exit_code:
             sys.exit(exit_code)

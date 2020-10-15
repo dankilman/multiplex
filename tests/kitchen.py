@@ -10,9 +10,18 @@ from colors.colors import _color_code as cc
 
 
 from multiplex import ansi
-from multiplex import Viewer, Multiplex, Controller
-from multiplex.iterator import Iterator
+from multiplex import Multiplex, Controller
 from multiplex.logging import init_logging
+
+
+def run(multi, *other):
+    future = asyncio.gather(multi.run_async(), *other)
+    try:
+        asyncio.get_event_loop().run_until_complete(future)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        multi.cleanup()
 
 
 def run_simple():
@@ -27,7 +36,7 @@ def run_simple():
 
     num_iterations = 2000
     num_iterators = 20
-    iterators = [Iterator(text_generator(i), f"It #{i + 1}") for i in range(num_iterators)]
+    iterators = [(text_generator(i), f"It #{i + 1}") for i in range(num_iterators)]
     return iterators
 
 
@@ -45,7 +54,7 @@ def run_colors():
 
     num_iterations = 2000
     num_iterators = 3
-    iterators = [Iterator(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
+    iterators = [(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
     return iterators
 
 
@@ -65,7 +74,7 @@ def run_dynamic():
 
     num_iterations = 2000
     num_iterators = 3
-    iterators = [Iterator(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
+    iterators = [(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
     return iterators
 
 
@@ -108,13 +117,12 @@ def run_style():
 
     num_iterations = 2000
     num_iterators = 3
-    iterators = [Iterator(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
+    iterators = [(text_generator, f"It #{i + 1}") for i in range(num_iterators)]
     return iterators
 
 
 def run_processes():
-    cmds = ["gls -la --group-directories-first --color=always"]
-    return [Iterator(cmds[0])]
+    return ["gls -la --group-directories-first --color=always"]
 
 
 def run_controller():
@@ -125,7 +133,6 @@ def run_controller():
     multplex.add(c2)
 
     async def runner(c):
-        await asyncio.sleep(1)
         c.write("some data 1\n")
         await asyncio.sleep(1)
         c.write("some data 2\n")
@@ -136,11 +143,7 @@ def run_controller():
         c.set_title(f"{c.title} [done]")
         c.collapse()
 
-    future = asyncio.gather(runner(c1), runner(c2), multplex.run_async())
-    try:
-        asyncio.get_event_loop().run_until_complete(future)
-    finally:
-        multplex.viewer.restore()
+    run(multplex, runner(c1), runner(c2))
 
 
 def run_controller_thread_safe():
@@ -151,7 +154,6 @@ def run_controller_thread_safe():
     multiplex.add(c2)
 
     def runner(c):
-        time.sleep(1)
         c.write("some data 1\n")
         time.sleep(1)
         c.write("some data 2\n")
@@ -166,32 +168,24 @@ def run_controller_thread_safe():
     for t in threads:
         t.daemon = True
         t.start()
-    multiplex.run()
+    run(multiplex)
 
 
 def run_live():
-    # def obj():
-    #     yield "hello"
     obj = "echo $RANDOM; sleep 5; echo $RANDOM"
 
     multi = Multiplex(box_height=3)
 
     async def runner():
         while not multi.viewer or not multi.viewer.stopped:
-            await multi.add_async(obj)
+            multi.add(obj)
             await asyncio.sleep(0.1)
 
-    future = asyncio.gather(runner(), multi.run_async())
-    try:
-        asyncio.get_event_loop().run_until_complete(future)
-    finally:
-        if multi.viewer and not multi.viewer.stopped:
-            multi.viewer.restore()
+    run(multi, runner())
 
 
 def run_live_thread_safe():
-    def obj():
-        yield "hello"
+    obj = "echo $RANDOM; sleep 5; echo $RANDOM"
 
     multi = Multiplex(box_height=3)
 
@@ -207,19 +201,19 @@ def run_live_thread_safe():
     for t in threads:
         t.daemon = True
         t.start()
-    multi.run()
+    run(multi)
 
 
 whats = {
-    "simple": run_simple,
-    "process": run_processes,
-    "color": run_colors,
-    "dyn": run_dynamic,
-    "style": run_style,
-    "control": run_controller,
-    "tcontrol": run_controller_thread_safe,
-    "live": run_live,
-    "tlive": run_live_thread_safe,
+    "1": run_simple,
+    "2": run_processes,
+    "3": run_colors,
+    "4": run_dynamic,
+    "5": run_style,
+    "6": run_controller,
+    "7": run_controller_thread_safe,
+    "8": run_live,
+    "9": run_live_thread_safe,
 }
 
 
@@ -230,16 +224,18 @@ def parse_args():
 
 
 def main():
-    try:
-        init_logging()
-        args = parse_args()
-        fn = whats.get(args.what, run_simple)
-        result = fn()
-        if isinstance(result, list):
-            viewer = Viewer(result, verbose=True)
-            viewer.run()
-    except KeyboardInterrupt:
-        pass
+    init_logging()
+    args = parse_args()
+    fn = whats.get(args.what, run_simple)
+    result = fn()
+    if isinstance(result, list):
+        multi = Multiplex(verbose=True)
+        for i in result:
+            title = None
+            if isinstance(i, tuple):
+                i, title = i
+            multi.add(i, title)
+        multi.run()
 
 
 if __name__ == "__main__":

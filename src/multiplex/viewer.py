@@ -3,7 +3,7 @@ import logging
 
 import aiostream
 
-from multiplex import ansi
+from multiplex import ansi, to_iterator
 from multiplex import keys
 from multiplex import keys_input
 from multiplex import resize
@@ -14,7 +14,7 @@ from multiplex.box import BoxHolder
 from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
 from multiplex.help import HelpViewState
-from multiplex.refs import REDRAW
+from multiplex.refs import REDRAW, RECALC
 
 logger = logging.getLogger("multiplex.view")
 
@@ -35,10 +35,10 @@ class ViewerEvents:
 
 
 class Viewer:
-    def __init__(self, iterators, box_height=None, verbose=False):
+    def __init__(self, descriptors, box_height=None, verbose=False):
         self.holders = []
         self.input_reader = keys_input.InputReader(viewer=self, bindings=keys.bindings)
-        self.iterators_queue = asyncio.Queue()
+        self.descriptors_queue = asyncio.Queue()
         self.help = HelpViewState(self)
         self.events = ViewerEvents()
         self.box_height = box_height
@@ -51,19 +51,12 @@ class Viewer:
         self.cols = None
         self.lines = None
         self.stopped = False
-        for iterator in iterators:
-            self.add(iterator, redraw=False)
+        for descriptor in descriptors:
+            self.add(descriptor, redraw=False, num_boxes=len(descriptors))
 
-    def add(self, iterator, thread_safe=False, redraw=True):
-        box_height = iterator.box_height or self.box_height
-        index = self.num_boxes
-
+    def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
         def action():
-            holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
-            self.holders.append(holder)
-            self.iterators_queue.put_nowait((index, iterator))
-            if redraw:
-                self.events.send((REDRAW, None))
+            self.descriptors_queue.put_nowait((descriptor, redraw, num_boxes))
 
         if thread_safe:
             asyncio.get_event_loop().call_soon_threadsafe(action)
@@ -117,27 +110,13 @@ class Viewer:
     def get_box(self, index):
         return self.holders[index].box
 
-    def run(self):
+    async def run(self):
         try:
             self._setup()
-            asyncio.get_event_loop().run_until_complete(self.run_async(_setup=False))
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.stopped = True
-            self.restore()
-
-    async def run_async(self, _setup=True):
-        try:
-            if _setup:
-                self._setup()
             await self._main()
-        except KeyboardInterrupt:
-            pass
         finally:
-            if _setup:
-                self.stopped = True
-                self.restore()
+            self.restore()
+            self.stopped = True
 
     def _setup(self):
         loop = asyncio.get_event_loop()
@@ -164,9 +143,16 @@ class Viewer:
             yield self.input_reader.read()
             yield self.events.receive()
             while True:
-                index, iterator = await self.iterators_queue.get()
-                yield wrapped_iterator(self.get_holder(index), iterator.iterator)
-                self.iterators_queue.task_done()
+                descriptor, redraw, recalc_num_boxes = await self.descriptors_queue.get()
+                index = self.num_boxes
+                iterator = await to_iterator(descriptor.obj, descriptor.title)
+                box_height = descriptor.box_height or self.box_height
+                holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
+                self.holders.append(holder)
+                event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
+                self.events.send(event)
+                yield wrapped_iterator(holder, iterator.iterator)
+                self.descriptors_queue.task_done()
 
         async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
             async for obj, output in streamer:
@@ -180,13 +166,17 @@ class Viewer:
         if not self.holders:
             return
         ansi.clear()
-        default_box_height = max(MIN_BOX_HEIGHT, (self.lines - self.num_boxes - 1) // self.num_boxes)
+        self._update_holders()
+        self._update_view()
+        ansi.flush()
+
+    def _update_holders(self, num_boxes=None):
+        num_boxes = num_boxes or self.num_boxes
+        default_box_height = max(MIN_BOX_HEIGHT, (self.lines - num_boxes - 1) // num_boxes)
         for holder in self.holders:
             holder.buffer.width = self.cols
             if not holder.state.changed_height:
                 holder.state.box_height = default_box_height
-        self._update_view()
-        ansi.flush()
 
     def _update_lines_cols(self):
         cols, lines = ansi.get_size()
@@ -202,6 +192,9 @@ class Viewer:
     def _handle_event(self, obj, output):
         if obj is REDRAW:
             self._init()
+            return
+        if obj is RECALC:
+            self._update_holders(output)
             return
         if isinstance(obj, BoxHolder):
             self._update_box(obj.index, output)
