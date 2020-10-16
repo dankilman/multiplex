@@ -204,6 +204,32 @@ def run_live_thread_safe():
     run(multi)
 
 
+def run_multiline():
+    from easyansi import cursor, screen
+
+    m = Multiplex(verbose=True)
+
+    async def lines():
+        yield "one\n"
+        yield "two\n"
+        await asyncio.sleep(0.3)
+        yield "three"
+        yield screen.clear_line_code(2)
+        yield "ten"
+        yield cursor.up_code(1)
+        yield cursor.locate_column_code(4)
+        yield "new two"
+        yield cursor.up_code(1)
+        yield cursor.locate_column_code(0)
+        yield "n\n"
+        yield "b\n"
+        yield "c\n"
+        yield "r\r\r\r\r\r\n"
+
+    m.add(lines)
+    m.run()
+
+
 whats = {
     "1": run_simple,
     "2": run_processes,
@@ -214,6 +240,7 @@ whats = {
     "7": run_controller_thread_safe,
     "8": run_live,
     "9": run_live_thread_safe,
+    "10": run_multiline,
 }
 
 

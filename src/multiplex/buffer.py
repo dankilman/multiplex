@@ -226,7 +226,8 @@ class Buffer:
             if not skip_raw and i:
                 self.raw_lines += 1
             if i < len(lines) - 1:
-                line = f"{line}\r\n"
+                maybe_slash_r = "" if line and line[-1] == "\r" else "\r"
+                line = f"{line}{maybe_slash_r}\n"
             current_raw_line = self.raw_lines if not skip_raw else i
             for buffer in buffers:
                 dirty_lines = buffer.write(line)
