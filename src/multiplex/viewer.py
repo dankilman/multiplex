@@ -171,46 +171,8 @@ class Viewer:
 
     async def _main(self):
         self._init()
-
-        async def wrapped_iterator(stream_id, it):
-            async for elem in it:
-                yield stream_id, elem
-
-        async def sources():
-            yield self.input_reader.read()
-            yield self.events.receive()
-            while True:
-                item = await self.descriptors_queue.get()
-                descriptor = item.descriptor
-                redraw = item.redraw
-                recalc_num_boxes = item.num_boxes
-                index = self.num_boxes
-                stream_id = str(uuid.uuid4())
-                iterator = await to_iterator(
-                    obj=descriptor.obj,
-                    title=descriptor.title,
-                    context={
-                        "socket_path": self.socket_path,
-                        "stream_id": stream_id,
-                    },
-                )
-                box_height = descriptor.box_height or self.box_height
-                holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
-                self.holders.append(holder)
-                event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
-                self.events.send(event)
-                if redraw and not self.is_scrolling:
-                    self.events.send_all_down()
-                if iterator.iterator is SPLIT:
-                    stream_id = self.holder_to_stream_id.pop(id(self.get_holder(index - 1)))
-                self.holder_to_stream_id[id(holder)] = stream_id
-                self.stream_id_to_holder[stream_id] = holder
-                if iterator.iterator is not SPLIT:
-                    yield wrapped_iterator(stream_id, iterator.iterator)
-                self.descriptors_queue.task_done()
-
         try:
-            async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
+            async with aiostream.stream.advanced.flatten(self._sources()).stream() as streamer:
                 async for obj, output in streamer:
                     try:
                         self._handle_event(obj, output)
@@ -221,6 +183,49 @@ class Viewer:
             # aiostream context manager __aexit__, so we silently ignore
             if "StopAsyncIteration" not in str(e):
                 raise
+
+    async def _sources(self):
+        yield self.input_reader.read()
+        yield self.events.receive()
+        while True:
+            item = await self.descriptors_queue.get()
+            source = await self._process_descriptor(item)
+            if source:
+                yield source
+            self.descriptors_queue.task_done()
+
+    async def _process_descriptor(self, descriptor_queue_item):
+        descriptor = descriptor_queue_item.descriptor
+        redraw = descriptor_queue_item.redraw
+        recalc_num_boxes = descriptor_queue_item.num_boxes
+        index = self.num_boxes
+        stream_id = str(uuid.uuid4())
+        iterator = await to_iterator(
+            obj=descriptor.obj,
+            title=descriptor.title,
+            context={
+                "socket_path": self.socket_path,
+                "stream_id": stream_id,
+            },
+        )
+        box_height = descriptor.box_height or self.box_height
+        holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
+        self.holders.append(holder)
+        event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
+        self.events.send(event)
+        if redraw and not self.is_scrolling:
+            self.events.send_all_down()
+        if iterator.iterator is SPLIT:
+            stream_id = self.holder_to_stream_id.pop(id(self.get_holder(index - 1)))
+        self.holder_to_stream_id[id(holder)] = stream_id
+        self.stream_id_to_holder[stream_id] = holder
+        if iterator.iterator is not SPLIT:
+            return self._wrapped_iterator(stream_id, iterator.iterator)
+
+    @staticmethod
+    async def _wrapped_iterator(stream_id, iterator):
+        async for elem in iterator:
+            yield stream_id, elem
 
     def _init(self):
         self._update_lines_cols()
