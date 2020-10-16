@@ -15,6 +15,8 @@ async def ipc_mode(socket_path, process, title, box_height):
     if first == "@":
         title = title or " ".join(process[1:])
         await client.split(title, box_height)
+    elif first == ":":
+        await client.quit()
     elif first in {"/", "+", "-"}:
         value = None if first == "/" else True if first == "-" else False
         await client.toggle_collapse(value)

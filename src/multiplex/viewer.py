@@ -17,7 +17,7 @@ from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
 from multiplex.help import HelpViewState
 from multiplex.iterator import Descriptor
-from multiplex.refs import REDRAW, RECALC, SPLIT
+from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN
 
 logger = logging.getLogger("multiplex.view")
 
@@ -38,6 +38,12 @@ class ViewerEvents:
 
     def send_redraw(self):
         self.queue.put_nowait((REDRAW, None))
+
+    def send_quit(self):
+        self.queue.put_nowait((QUIT, None))
+
+    def send_all_down(self):
+        self.queue.put_nowait((ALL_DOWN, None))
 
 
 @dataclass
@@ -192,9 +198,9 @@ class Viewer:
                 holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
                 self.holders.append(holder)
                 event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
-                if redraw and not self.is_scrolling:
-                    commands.all_down(self)
                 self.events.send(event)
+                if redraw and not self.is_scrolling:
+                    self.events.send_all_down()
                 if iterator.iterator is SPLIT:
                     stream_id = self.holder_to_stream_id.pop(id(self.get_holder(index - 1)))
                 self.holder_to_stream_id[id(holder)] = stream_id
@@ -251,7 +257,14 @@ class Viewer:
         if obj is RECALC:
             self._update_holders(output)
             return
-        if isinstance(obj, str):
+        if obj is QUIT:
+            raise EndViewer
+
+        if obj is ALL_DOWN:
+            commands.all_down(self)
+            ansi.clear()
+            self._update_view()
+        elif isinstance(obj, str):
             holder = self.stream_id_to_holder[obj]
             self._update_box(holder.index, output)
             if isinstance(output, BoxAction) or callable(output):
