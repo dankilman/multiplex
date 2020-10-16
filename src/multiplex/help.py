@@ -26,5 +26,5 @@ class HelpViewState:
         max_line = self.max_current_line
         if self.viewer.lines:
             max_line -= self.viewer.lines
-        self.current_line = min(max_line, self.current_line + 1)
+        self.current_line = max(0, min(max_line, self.current_line + 1))
         return True
