@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from typing import List
 
+from multiplex.ansi import C
+from multiplex.refs import SPLIT
+
 
 class Action:
     pass
@@ -16,7 +19,11 @@ class SetTitle(BoxAction):
     title: str
 
     def run(self, box_holder):
-        box_holder.iterator.title = self.title
+        title = self.title
+        iterator = box_holder.iterator
+        if iterator.iterator is SPLIT:
+            title += f" ({iterator.title})"
+        iterator.title = title
 
 
 class Collapse(BoxAction):
@@ -38,4 +45,9 @@ class BoxActions(BoxAction):
 
     def run(self, box_holder):
         for action in self.actions:
-            action.run(box_holder)
+            if isinstance(action, BoxAction):
+                action.run(box_holder)
+            elif callable(action):
+                action(box_holder)
+            else:
+                raise RuntimeError(f"Invalid action: {action}")

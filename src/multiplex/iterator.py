@@ -13,11 +13,13 @@ from typing import Any
 import aiofiles
 from aiostream.stream import create, combine
 from multiplex import ansi
-from multiplex.actions import SetTitle, BoxActions, UpdateMetadata, Collapse
+from multiplex.actions import SetTitle, BoxActions, UpdateMetadata
 from multiplex.ansi import C, RED_RGB, GREEN_RGB
 from multiplex.controller import Controller
+from multiplex.refs import SPLIT, STOP
 
-STOP = object()
+MULTIPLEX_SOCKET_PATH = "MULTIPLEX_SOCKET_PATH"
+MULTIPLEX_STREAM_ID = "MULTIPLEX_STREAM_ID"
 
 
 async def stream_reader_generator(reader):
@@ -65,7 +67,7 @@ def _extract_title(current_title, obj):
     return None
 
 
-def _str_to_iterator(str_value, title):
+def _str_to_iterator(str_value, title, context):
     def _setsize(fd):
         cols, rows = ansi.get_size()
         s = struct.pack("HHHH", rows, cols, 0, 0)
@@ -74,11 +76,19 @@ def _str_to_iterator(str_value, title):
     title = _extract_title(title, str_value)
     master, slave = pty.openpty()
     _setsize(slave)
+    env = os.environ.copy()
+    env.update(
+        {
+            MULTIPLEX_SOCKET_PATH: context.get("socket_path", ""),
+            MULTIPLEX_STREAM_ID: context.get("stream_id", ""),
+        }
+    )
     obj = asyncio.subprocess.create_subprocess_shell(
         str_value,
         stdin=slave,
         stdout=slave,
         stderr=slave,
+        env=env,
     )
     return obj, title, (master, slave)
 
@@ -127,7 +137,6 @@ def _process_to_iterator(process, title, master, slave):
             [
                 UpdateMetadata({"exit_code": exit_code}),
                 SetTitle(C("[", status, f"] {title}")),
-                # Collapse(),
             ]
         )
 
@@ -205,10 +214,10 @@ def _callable_to_iterator(cb, title):
     return obj, title
 
 
-async def _to_iterator(obj, title):
+async def _to_iterator(obj, title, context):
     master, slave = None, None
     if isinstance(obj, str):
-        obj, title, (master, slave) = _str_to_iterator(obj, title)
+        obj, title, (master, slave) = _str_to_iterator(obj, title, context)
     elif isinstance(obj, (types.FunctionType, types.MethodType)):
         obj, title = _callable_to_iterator(obj, title)
 
@@ -239,5 +248,7 @@ async def _to_iterator(obj, title):
     return obj, title, inner_type
 
 
-async def to_iterator(obj, title=None) -> Iterator:
-    return Iterator(*(await _to_iterator(obj, title)))
+async def to_iterator(obj, title=None, context=None) -> Iterator:
+    if obj is SPLIT:
+        return Iterator(SPLIT, title, "split")
+    return Iterator(*(await _to_iterator(obj, title, context or {})))

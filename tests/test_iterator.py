@@ -93,7 +93,7 @@ async def test_async_process_pipe_stdout_stederr(patch_actions):
 
 async def test_async_process_pipe_backslash_r(patch_actions):
     p = await asyncio.subprocess.create_subprocess_shell(
-        cmd=f"printf hello; sleep 0.01; printf \r; echo goodbye",
+        cmd=f"printf hello; sleep 0.01; printf \r; sleep 0.01; echo goodbye",
         stdout=asyncio.subprocess.PIPE,
     )
     iterator = await to_iterator(p)
@@ -103,7 +103,8 @@ async def test_async_process_pipe_backslash_r(patch_actions):
         iterator.iterator,
         [
             "hello",
-            "\rgoodbye\n",
+            "\r",
+            "goodbye\n",
             ACTION,
         ],
     )

@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import uuid
+from dataclasses import dataclass
 
 import aiostream
 
@@ -7,14 +9,15 @@ from multiplex import ansi, to_iterator
 from multiplex import keys
 from multiplex import keys_input
 from multiplex import resize
-from multiplex import commands  # noqa
+from multiplex import commands
 from multiplex.actions import BoxAction
 from multiplex.ansi import C, NONE
 from multiplex.box import BoxHolder
 from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
 from multiplex.help import HelpViewState
-from multiplex.refs import REDRAW, RECALC
+from multiplex.iterator import Descriptor
+from multiplex.refs import REDRAW, RECALC, SPLIT
 
 logger = logging.getLogger("multiplex.view")
 
@@ -33,16 +36,29 @@ class ViewerEvents:
     def send(self, message):
         self.queue.put_nowait(message)
 
+    def send_redraw(self):
+        self.queue.put_nowait((REDRAW, None))
+
+
+@dataclass
+class DescriptorQueueItem:
+    descriptor: Descriptor
+    redraw: bool
+    num_boxes: int
+
 
 class Viewer:
-    def __init__(self, descriptors, box_height=None, verbose=False):
+    def __init__(self, descriptors, box_height, verbose, socket_path):
         self.holders = []
+        self.stream_id_to_holder = {}
+        self.holder_to_stream_id = {}
         self.input_reader = keys_input.InputReader(viewer=self, bindings=keys.bindings)
-        self.descriptors_queue = asyncio.Queue()
+        self.descriptors_queue: "asyncio.Queue[DescriptorQueueItem]" = asyncio.Queue()
         self.help = HelpViewState(self)
         self.events = ViewerEvents()
         self.box_height = box_height
         self.verbose = verbose
+        self.socket_path = socket_path
         self.current_focused_box = 0
         self.current_view_line = 0
         self.maximized = False
@@ -56,12 +72,27 @@ class Viewer:
 
     def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
         def action():
-            self.descriptors_queue.put_nowait((descriptor, redraw, num_boxes))
+            self.descriptors_queue.put_nowait(
+                DescriptorQueueItem(
+                    descriptor=descriptor,
+                    redraw=redraw,
+                    num_boxes=num_boxes,
+                )
+            )
 
         if thread_safe:
             asyncio.get_event_loop().call_soon_threadsafe(action)
         else:
             action()
+
+    def split(self, title, box_height=None):
+        self.descriptors_queue.put_nowait(
+            DescriptorQueueItem(
+                descriptor=Descriptor(SPLIT, title, box_height),
+                redraw=True,
+                num_boxes=None,
+            )
+        )
 
     def swap_indices(self, index1, index2):
         holder1 = self.get_holder(index1)
@@ -135,31 +166,55 @@ class Viewer:
     async def _main(self):
         self._init()
 
-        async def wrapped_iterator(holder, it):
+        async def wrapped_iterator(stream_id, it):
             async for elem in it:
-                yield holder, elem
+                yield stream_id, elem
 
         async def sources():
             yield self.input_reader.read()
             yield self.events.receive()
             while True:
-                descriptor, redraw, recalc_num_boxes = await self.descriptors_queue.get()
+                item = await self.descriptors_queue.get()
+                descriptor = item.descriptor
+                redraw = item.redraw
+                recalc_num_boxes = item.num_boxes
                 index = self.num_boxes
-                iterator = await to_iterator(descriptor.obj, descriptor.title)
+                stream_id = str(uuid.uuid4())
+                iterator = await to_iterator(
+                    obj=descriptor.obj,
+                    title=descriptor.title,
+                    context={
+                        "socket_path": self.socket_path,
+                        "stream_id": stream_id,
+                    },
+                )
                 box_height = descriptor.box_height or self.box_height
                 holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
                 self.holders.append(holder)
                 event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
+                if redraw and not self.is_scrolling:
+                    commands.all_down(self)
                 self.events.send(event)
-                yield wrapped_iterator(holder, iterator.iterator)
+                if iterator.iterator is SPLIT:
+                    stream_id = self.holder_to_stream_id.pop(id(self.get_holder(index - 1)))
+                self.holder_to_stream_id[id(holder)] = stream_id
+                self.stream_id_to_holder[stream_id] = holder
+                if iterator.iterator is not SPLIT:
+                    yield wrapped_iterator(stream_id, iterator.iterator)
                 self.descriptors_queue.task_done()
 
-        async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
-            async for obj, output in streamer:
-                try:
-                    self._handle_event(obj, output)
-                except EndViewer:
-                    return
+        try:
+            async with aiostream.stream.advanced.flatten(sources()).stream() as streamer:
+                async for obj, output in streamer:
+                    try:
+                        self._handle_event(obj, output)
+                    except EndViewer:
+                        return
+        except RuntimeError as e:
+            # not sure what's the cause, but occasionally this is raised during
+            # aiostream context manager __aexit__, so we silently ignore
+            if "StopAsyncIteration" not in str(e):
+                raise
 
     def _init(self):
         self._update_lines_cols()
@@ -196,9 +251,10 @@ class Viewer:
         if obj is RECALC:
             self._update_holders(output)
             return
-        if isinstance(obj, BoxHolder):
-            self._update_box(obj.index, output)
-            if isinstance(output, BoxAction):
+        if isinstance(obj, str):
+            holder = self.stream_id_to_holder[obj]
+            self._update_box(holder.index, output)
+            if isinstance(output, BoxAction) or callable(output):
                 ansi.clear()
                 self._update_view()
         else:
@@ -230,6 +286,8 @@ class Viewer:
         if data is not None:
             if isinstance(data, BoxAction):
                 data.run(self.get_holder(i))
+            elif callable(data):
+                data(self.get_holder(i))
             else:
                 self.get_buffer(i).write(data)
         if self.help.show:
@@ -391,6 +449,10 @@ class Viewer:
     @property
     def focused(self):
         return self.get_box(self.current_focused_box)
+
+    @property
+    def is_scrolling(self):
+        return not self.focused.state.auto_scroll
 
     @property
     def max_current_line(self):
