@@ -74,6 +74,8 @@ def _extract_title(current_title, obj):
     if current_title is not None:
         return current_title
     if isinstance(obj, str):
+        if obj.startswith("file://") or obj.startswith("asciinema://"):
+            return obj.split("://")[1]
         return obj
     title_attr = getattr(obj, "title", None)
     if title_attr:
@@ -119,6 +121,8 @@ def _str_to_iterator(str_value, title, context):
     master, slave = None, None
     if str_value.startswith("asciinema://"):
         obj = asciinema_recording_iterator(str_value.split("://", 1)[1])
+    elif str_value.startswith("file://"):
+        obj = pathlib.Path(str_value.split("://")[1])
     else:
         obj, (master, slave) = _process_str_to_iterator(str_value, context)
     return obj, title, (master, slave)
@@ -180,8 +184,7 @@ def _process_to_iterator(process, title, master, slave):
 def _path_to_iterator(file_path):
     async def g():
         async with aiofiles.open(file_path, encoding="utf-8") as f:
-            async for line in f:
-                yield line
+            yield await f.read()
 
     obj = g()
     title = str(file_path)

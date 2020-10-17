@@ -227,15 +227,25 @@ async def test_path(tmp_path):
     iterator = await to_iterator(path)
     assert iterator.inner_type == "path"
     assert iterator.title == str(path)
-    await assert_aiter(iterator.iterator, ["hello\n", "goodbye"])
+    await assert_aiter(iterator.iterator, [text])
 
 
-async def test_str_async(patch_actions):
+async def test_str_process(patch_actions):
     cmd = "printf hello"
     iterator = await to_iterator(cmd)
     assert iterator.inner_type == "async_process"
     assert iterator.title == cmd
     await assert_aiter(iterator.iterator, ["hello", None, ACTION])
+
+
+async def test_str_path(tmp_path):
+    path = tmp_path / "mock.txt"
+    text = "hello\ngoodbye"
+    path.write_text(text)
+    iterator = await to_iterator(f"file://{path}")
+    assert iterator.inner_type == "path"
+    assert iterator.title == str(path)
+    await assert_aiter(iterator.iterator, [text])
 
 
 async def test_setsize(patch_actions, monkeypatch):
