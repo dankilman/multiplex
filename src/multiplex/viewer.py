@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import types
 import uuid
 from dataclasses import dataclass
 
@@ -17,7 +18,7 @@ from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
 from multiplex.help import HelpViewState
 from multiplex.iterator import Descriptor
-from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN
+from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN, OUTPUT_SAVED, SAVE
 
 logger = logging.getLogger("multiplex.view")
 
@@ -45,6 +46,12 @@ class ViewerEvents:
     def send_all_down(self):
         self.queue.put_nowait((ALL_DOWN, None))
 
+    def send_save(self):
+        self.queue.put_nowait((SAVE, None))
+
+    def send_output_saved(self):
+        self.queue.put_nowait((OUTPUT_SAVED, None))
+
 
 @dataclass
 class DescriptorQueueItem:
@@ -54,7 +61,7 @@ class DescriptorQueueItem:
 
 
 class Viewer:
-    def __init__(self, descriptors, box_height, verbose, socket_path):
+    def __init__(self, descriptors, box_height, verbose, socket_path, output_path):
         self.holders = []
         self.stream_id_to_holder = {}
         self.holder_to_stream_id = {}
@@ -65,6 +72,7 @@ class Viewer:
         self.box_height = box_height
         self.verbose = verbose
         self.socket_path = socket_path
+        self.output_path = output_path
         self.current_focused_box = 0
         self.current_view_line = 0
         self.maximized = False
@@ -73,8 +81,10 @@ class Viewer:
         self.cols = None
         self.lines = None
         self.stopped = False
-        for descriptor in descriptors:
-            self.add(descriptor, redraw=False, num_boxes=len(descriptors))
+        self.output_saved = False
+        for i, descriptor in enumerate(descriptors):
+            redraw = i == len(descriptors) - 1
+            self.add(descriptor, redraw=redraw, num_boxes=len(descriptors))
 
     def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
         def action():
@@ -175,7 +185,7 @@ class Viewer:
             async with aiostream.stream.advanced.flatten(self._sources()).stream() as streamer:
                 async for obj, output in streamer:
                     try:
-                        self._handle_event(obj, output)
+                        await self._handle_event(obj, output)
                     except EndViewer:
                         return
         except RuntimeError as e:
@@ -255,7 +265,7 @@ class Viewer:
             logger.debug(f"sizes: prev [{prev_lines}, {prev_cols}], new [{self.lines}, {self.cols}]")
         return changed
 
-    def _handle_event(self, obj, output):
+    async def _handle_event(self, obj, output):
         if obj is REDRAW:
             self._init()
             return
@@ -265,7 +275,14 @@ class Viewer:
         if obj is QUIT:
             raise EndViewer
 
-        if obj is ALL_DOWN:
+        if obj is SAVE:
+            await commands.save(self)
+            self._update_status_bar()
+        elif obj is OUTPUT_SAVED:
+            await asyncio.sleep(0.1)
+            self.output_saved = False
+            self._update_status_bar()
+        elif obj is ALL_DOWN:
             commands.all_down(self)
             ansi.clear()
             self._update_view()
@@ -280,7 +297,7 @@ class Viewer:
             boxes_changed = set()
             full_refresh = False
             for fn in output:
-                current_key_changed = self._process_key_handler(fn)
+                current_key_changed = await self._process_key_handler(fn)
                 if current_key_changed is ansi.FULL_REFRESH:
                     full_refresh = True
                     key_changed = True
@@ -315,10 +332,12 @@ class Viewer:
         if box.is_visible:
             box.update()
 
-    def _process_key_handler(self, fn):
+    async def _process_key_handler(self, fn):
         prev_current_line = self.current_view_line
         prev_focused_box = self.current_focused_box
         update_view = fn(self)
+        if isinstance(update_view, types.CoroutineType):
+            update_view = await update_view
         if update_view is not None and not isinstance(update_view, bool):
             return update_view
         if prev_focused_box != self.current_focused_box:
@@ -440,7 +459,12 @@ class Viewer:
             title = title[: (self.cols - mode_len) - len(_ellipsis)]
             title += _ellipsis
             space_between = 0
-        bg = ansi.CYAN_RGB if not auto_scroll else ansi.GRAY1_RGB
+        if self.output_saved:
+            bg = ansi.GREEN_RGB
+        elif not auto_scroll:
+            bg = ansi.CYAN_RGB
+        else:
+            bg = ansi.GRAY1_RGB
         text = C(title, " " * space_between, pending_text, mode_paren, bg=bg, fg=NONE)
 
         ansi.status_bar(

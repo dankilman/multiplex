@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 import warnings
 
@@ -15,6 +16,8 @@ async def ipc_mode(socket_path, process, title, box_height):
     if first == "@":
         title = title or " ".join(process[1:])
         await client.split(title, box_height)
+    elif first == "@save":
+        await client.save()
     elif first == ":":
         await client.quit()
     elif first in {"/", "+", "-"}:
@@ -26,8 +29,8 @@ async def ipc_mode(socket_path, process, title, box_height):
         await client.batch([client.add_request_body(p, box_height=box_height, title=None) for p in process])
 
 
-def direct_mode(process, title, verbose, box_height):
-    multiplex = Multiplex(verbose=verbose, box_height=box_height)
+def direct_mode(process, title, verbose, box_height, output_path):
+    multiplex = Multiplex(verbose=verbose, box_height=box_height, output_path=output_path)
     for p in process:
         multiplex.add(p, title=title)
     multiplex.run()
@@ -41,10 +44,17 @@ def direct_mode(process, title, verbose, box_height):
 @click.argument("process", nargs=-1)
 @click.option("-t", "--title")
 @click.option("-b", "--box-height", type=int)
+@click.option(
+    "-o",
+    "--output-path",
+    help="Root directory to use when saving output",
+    default=os.getcwd(),
+    envvar="MULTIPLEX_OUTPUT_PATH",
+)
 @click.help_option("-h", "--help")
 @click.version_option(None, "--version")
 @click.option("-v", "--verbose", is_flag=True)
-def main(process, title, verbose, box_height):
+def main(process, title, verbose, box_height, output_path):
     if not process:
         raise click.ClickException("At least one command is required")
     if title and len(process) > 1:
@@ -66,4 +76,5 @@ def main(process, title, verbose, box_height):
             title=title,
             verbose=verbose,
             box_height=box_height,
+            output_path=output_path,
         )
