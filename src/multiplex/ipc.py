@@ -5,7 +5,7 @@ import tempfile
 from asyncio import StreamWriter, StreamReader
 from random import randint
 
-from multiplex import Viewer
+from multiplex.viewer import Viewer
 from multiplex.iterator import Descriptor, MULTIPLEX_SOCKET_PATH
 
 

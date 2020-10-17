@@ -1,5 +1,4 @@
 import asyncio
-import os
 
 from aiostream import streamcontext
 from aiostream.test_utils import assert_aiter
