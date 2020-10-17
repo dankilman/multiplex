@@ -52,7 +52,7 @@ def toggle_maximize(viewer):
     return FULL_REFRESH
 
 
-@bind(GLOBAL, "S", description="Dump boxes to output_dir (default: $PWD)")
+@bind(GLOBAL, "O", description="Dump boxes to output_dir (default: $PWD)")
 async def save(viewer):
     now = datetime.now()
     dir_name = f"output-{now.strftime('%Y-%m-%dT%H-%M-%S')}"

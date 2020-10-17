@@ -16,7 +16,7 @@ import aiofiles
 from aiostream.stream import create, combine
 from multiplex import ansi
 from multiplex.actions import SetTitle, BoxActions, UpdateMetadata
-from multiplex.ansi import C, RED_RGB, GREEN_RGB
+from multiplex.ansi import C, theme
 from multiplex.controller import Controller
 from multiplex.refs import SPLIT, STOP
 
@@ -163,7 +163,7 @@ def _process_to_iterator(process, title, master, slave):
         async for data in stream:
             yield data
         exit_code = process.returncode if slave else await process.wait()
-        status = C("✗", fg=RED_RGB) if exit_code else C("✓", fg=GREEN_RGB)
+        status = C("✗", fg=theme.X_COLOR[0]) if exit_code else C("✓", fg=theme.V_COLOR[0])
         yield BoxActions(
             [
                 UpdateMetadata({"exit_code": exit_code}),

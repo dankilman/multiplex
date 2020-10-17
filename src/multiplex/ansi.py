@@ -1,6 +1,7 @@
 import io
 
-from easyansi import screen, cursor, drawing, colors, colors_rgb, attributes
+from easyansi import screen, cursor, drawing, attributes
+from easyansi import colors_rgb as colors
 from easyansi._core.codes import CSI
 
 
@@ -22,19 +23,42 @@ def flush():
 
 
 NONE = object()
-RESET = colors_rgb.reset_code()
+RESET = colors.reset_code()
 
-MAGENTA = colors.MAGENTA
-CYAN = colors.CYAN
-RED_RGB = (255, 0, 0)
-GREEN_RGB = (0, 255, 0)
-GRAY1_RGB = (51, 51, 51)
-CYAN_RGB = (0, 200, 200)
+BLACK = (0, 0, 0)
+MAGENTA = (255, 0, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+GRAY = (51, 51, 51)
+CYAN = (0, 200, 200)
+
+
+class Theme:
+    X_COLOR = (RED, NONE)
+    V_COLOR = (GREEN, NONE)
+    TITLE_NORMAL = (GRAY, NONE)
+    TITLE_FOCUS = (CYAN, NONE)
+    STATUS_NORMAL = (NONE, GRAY)
+    STATUS_SCROLL = (BLACK, CYAN)
+    STATUS_SAVE = (BLACK, GREEN)
+    HELP_TITLES = (MAGENTA, NONE)
+
+
+theme = Theme
 
 
 CLEAR_LINE = CSI + "2K"
 ENABLE_ALT_BUFFER = CSI + "?1049h"
 DISABLE_ALT_BUFFER = CSI + "?1049l"
+
+
+def color_code(pair):
+    fg, bg = pair
+    if not fg or fg is NONE:
+        fg = (None, None, None)
+    if not bg or bg is NONE:
+        bg = (None, None, None)
+    return colors.color_code(*fg, *bg)
 
 
 def setup():
@@ -67,13 +91,13 @@ def text_box(from_row, to_row, text):
 
 def title(row, text, cols, hline_color):
     prnt(screen.clear_line_code(row))
-    prnt(colors.color_code(hline_color))
+    prnt(color_code(hline_color))
     prnt(drawing.hline_code(1))
     prnt(RESET)
     prnt(text)
     prnt(RESET)
     offset = 1 + len(text)
-    prnt(colors.color_code(hline_color))
+    prnt(color_code(hline_color))
     prnt(drawing.hline_code(cols - offset))
     prnt(RESET)
 
@@ -101,7 +125,7 @@ def help_screen(current_line, lines, cols, descriptions):
 
     for mode, mode_desciptions in descriptions.items():
         help_line.write(attributes.bright_code())
-        help_line.write(colors.color_code(colors.MAGENTA))
+        help_line.write(color_code(theme.HELP_TITLES))
         help_line.write(mode.capitalize())
         help_line.write(RESET)
         next_line()
@@ -146,10 +170,7 @@ class C:
             bg = (0, 0, 0)
 
         if fg or bg:
-            style = colors_rgb.color_code(
-                *(fg or (None, None, None)),
-                *(bg or (None, None, None)),
-            )
+            style = color_code((fg, bg))
         result = io.StringIO()
         if not no_style and style:
             result.write(style)

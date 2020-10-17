@@ -404,10 +404,11 @@ class Viewer:
 
         logger.debug(f"s{index}:\t{screen_y}\t{location}\t[{self.lines},{self.cols}]")
 
+        hline_color = ansi.theme.TITLE_FOCUS if index == self.current_focused_box else ansi.theme.TITLE_NORMAL
         ansi.title(
             row=screen_y,
             text=text,
-            hline_color=ansi.CYAN if index == self.current_focused_box else ansi.MAGENTA,
+            hline_color=hline_color,
             cols=self.cols,
         )
 
@@ -460,12 +461,12 @@ class Viewer:
             title += _ellipsis
             space_between = 0
         if self.output_saved:
-            bg = ansi.GREEN_RGB
+            color = ansi.theme.STATUS_SAVE
         elif not auto_scroll:
-            bg = ansi.CYAN_RGB
+            color = ansi.theme.STATUS_SCROLL
         else:
-            bg = ansi.GRAY1_RGB
-        text = C(title, " " * space_between, pending_text, mode_paren, bg=bg, fg=NONE)
+            color = ansi.theme.STATUS_NORMAL
+        text = C(title, " " * space_between, pending_text, mode_paren, fg=color[0], bg=color[1])
 
         ansi.status_bar(
             row=self.get_status_bar_line(),
