@@ -2,7 +2,7 @@ import asyncio
 import os
 from typing import List
 
-from multiplex import Viewer
+from multiplex.viewer import Viewer
 from multiplex.iterator import Descriptor
 from multiplex.ipc import Server
 
