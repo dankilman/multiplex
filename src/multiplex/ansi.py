@@ -132,6 +132,9 @@ class C:
         return sum(len(p) for p in self.parts)
 
     def __str__(self):
+        return self.to_string()
+
+    def to_string(self, no_style=False):
         fg, bg = self.fg, self.bg
         style = None
         if fg is NONE and bg is NONE:
@@ -148,11 +151,12 @@ class C:
                 *(bg or (None, None, None)),
             )
         result = io.StringIO()
-        if style:
+        if not no_style and style:
             result.write(style)
         for part in self.parts:
-            result.write(str(part))
-            if isinstance(part, C) and style:
+            value = part.to_string(no_style) if isinstance(part, C) else str(part)
+            result.write(value)
+            if not no_style and isinstance(part, C) and style:
                 result.write(style)
         return result.getvalue()
 

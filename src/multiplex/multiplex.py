@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import List
 
 from multiplex import Viewer
@@ -7,10 +8,11 @@ from multiplex.ipc import Server
 
 
 class Multiplex:
-    def __init__(self, verbose=False, box_height=None):
+    def __init__(self, verbose=False, box_height=None, output_path=None):
         self.descriptors: List[Descriptor] = []
         self.verbose = verbose
         self.box_height = box_height
+        self.output_path = output_path or os.getcwd()
         self.server = Server()
         self.viewer: Viewer = None
 
@@ -29,6 +31,7 @@ class Multiplex:
             verbose=self.verbose,
             box_height=self.box_height,
             socket_path=self.server.socket_path,
+            output_path=self.output_path,
         )
         await self.server.start(viewer=self.viewer)
         try:

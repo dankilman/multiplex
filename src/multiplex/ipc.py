@@ -47,6 +47,8 @@ class Server:
             self.viewer.events.send_redraw()
         elif action == "add":
             self.viewer.add(Descriptor(**message))
+        elif action == "save":
+            self.viewer.events.send_save()
         elif action == "quit":
             self.viewer.events.send_quit()
         elif action == "batch":
@@ -78,6 +80,13 @@ class Client:
     @staticmethod
     def collapse_request_body(value):
         return {"action": "collapse", "value": value}
+
+    async def save(self):
+        await self._request(self.save_request_body())
+
+    @staticmethod
+    def save_request_body():
+        return {"action": "save"}
 
     async def quit(self):
         await self._request(self.quit_request_body())

@@ -279,10 +279,7 @@ class Buffer:
     @width.setter
     def width(self, value):
         self.wrapping_buffer = self._new_wrapping_buffer(value)
-        old_location = self.raw_buffer.tell()
-        self.raw_buffer.seek(0)
-        self.write(self.raw_buffer.read(), skip_raw=True, buffers=[self.wrapping_buffer])
-        self.raw_buffer.seek(old_location)
+        self.write(self.raw_buffer.getvalue(), skip_raw=True, buffers=[self.wrapping_buffer])
 
     def get_num_lines(self, wrap=False):
         return self._get_buffer(wrap).num_lines
