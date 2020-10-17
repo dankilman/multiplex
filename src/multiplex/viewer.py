@@ -83,8 +83,8 @@ class Viewer:
         self.stopped = False
         self.output_saved = False
         for i, descriptor in enumerate(descriptors):
-            redraw = i == len(descriptors) - 1
-            self.add(descriptor, redraw=redraw, num_boxes=len(descriptors))
+            self.add(descriptor, redraw=False, num_boxes=len(descriptors))
+            self.events.send_redraw()
 
     def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
         def action():
