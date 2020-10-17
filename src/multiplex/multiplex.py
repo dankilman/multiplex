@@ -45,9 +45,17 @@ class Multiplex:
         if self.viewer:
             self.viewer.add(descriptor, thread_safe=thread_safe)
 
+    def add_thread_safe(self, obj, title=None, box_height=None):
+        self.add(obj, title, box_height, thread_safe=True)
+
     def cleanup(self):
-        if self.viewer and not self.viewer.stopped:
-            self.viewer.restore()
+        if self.viewer:
+            if not self.viewer.stopped:
+                self.viewer.restore()
+            for it in self.viewer.iterators:
+                close = it.metadata.get("close")
+                if close:
+                    close()
         if self.server and not self.server.stopped:
             self.server.stop()
 

@@ -8,20 +8,9 @@ import time
 import colors
 from colors.colors import _color_code as cc
 
-
 from multiplex import ansi
 from multiplex import Multiplex, Controller
 from multiplex.logging import init_logging
-
-
-def run(multi, *other):
-    future = asyncio.gather(multi.run_async(), *other)
-    try:
-        asyncio.get_event_loop().run_until_complete(future)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        multi.cleanup()
 
 
 def run_simple():
@@ -168,7 +157,7 @@ def run_controller_thread_safe():
     for t in threads:
         t.daemon = True
         t.start()
-    run(multiplex)
+    multiplex.run()
 
 
 def run_live():
@@ -189,19 +178,16 @@ def run_live_thread_safe():
 
     multi = Multiplex(box_height=3)
 
-    loop = asyncio.get_event_loop()
-
     def runner(_):
-        asyncio.set_event_loop(loop)
         while not multi.viewer or not multi.viewer.stopped:
-            multi.add(obj, thread_safe=True)
+            multi.add_thread_safe(obj)
             time.sleep(1)
 
     threads = [threading.Thread(target=runner, args=(c,)) for c in [1]]
     for t in threads:
         t.daemon = True
         t.start()
-    run(multi)
+    multi.run()
 
 
 def run_multiline():
@@ -250,10 +236,21 @@ def parse_args():
     return parser.parse_args()
 
 
+def run(multi, *other):
+    async def cor():
+        return await asyncio.gather(multi.run_async(), *other)
+
+    try:
+        asyncio.run(cor())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        multi.cleanup()
+
+
 def main():
     init_logging()
-    args = parse_args()
-    fn = whats.get(args.what, run_simple)
+    fn = whats.get(parse_args().what, run_simple)
     result = fn()
     if isinstance(result, list):
         multi = Multiplex(verbose=True)

@@ -38,7 +38,12 @@ def toggle_collapse(viewer):
 
 @bind(GLOBAL, "C", description="Toggle expand/collapse for all boxes")
 def toggle_collapse_all(viewer):
-    new_value = not viewer.collaped_all
+    if all(box.state.collapsed for box in viewer.boxes):
+        new_value = False
+    elif not any(box.state.collapsed for box in viewer.boxes):
+        new_value = True
+    else:
+        new_value = not viewer.collaped_all
     for box in viewer.boxes:
         box.toggle_collapse(new_value)
     viewer.collaped_all = new_value
@@ -49,6 +54,14 @@ def toggle_collapse_all(viewer):
 @bind(GLOBAL, "m", description="Toggle maxmize")
 def toggle_maximize(viewer):
     viewer.maximized = not viewer.maximized
+    return FULL_REFRESH
+
+
+@bind(GLOBAL, "=", description="Strip empty lines from boxes that finished processing")
+def strip_empty_lines(viewer):
+    for box in viewer.boxes:
+        box.strip_empty_lines()
+    all_up(viewer)
     return FULL_REFRESH
 
 
@@ -94,6 +107,16 @@ def move_left(viewer):
     return viewer.focused.move_left()
 
 
+@bind(GLOBAL, ")", description="Move 1/2 screen to the right")
+def move_half_screen_right(viewer):
+    return viewer.focused.move_half_screen_right()
+
+
+@bind(GLOBAL, "(", description="Move 1/2 screen to the left")
+def move_half_screen_left(viewer):
+    return viewer.focused.move_half_screen_left()
+
+
 @bind(GLOBAL, "$", description="Move all the way to the right")
 def move_right_until_end(viewer):
     return viewer.focused.move_right_until_end()
@@ -135,7 +158,7 @@ def switch_with_previous_box(viewer):
     return FULL_REFRESH
 
 
-@bind(NORMAL, "gg", HOME, description="Focus first box")
+@bind(NORMAL, "g", HOME, description="Focus first box")
 def all_up(viewer):
     viewer.current_focused_box = 0
     viewer.verify_focused_box_in_view()
@@ -147,22 +170,22 @@ def all_down(viewer):
     viewer.verify_focused_box_in_view()
 
 
-@bind(NORMAL, CTRL_F, PAGEDOWN, description="View 1 page down")
+@bind(NORMAL, "f", CTRL_F, PAGEDOWN, description="View 1 page down")
 def page_down(viewer):
     viewer.current_view_line = min(viewer.max_current_line, viewer.current_view_line + viewer.lines)
 
 
-@bind(NORMAL, CTRL_B, PAGEUP, description="View 1 page up")
+@bind(NORMAL, "b", CTRL_B, PAGEUP, description="View 1 page up")
 def page_up(viewer):
     viewer.current_view_line = max(0, viewer.current_view_line - viewer.lines)
 
 
-@bind(NORMAL, CTRL_D, description="View 1/2 page down")
+@bind(NORMAL, "d", CTRL_D, description="View 1/2 page down")
 def half_page_down(viewer):
     viewer.current_view_line = min(viewer.max_current_line, viewer.current_view_line + viewer.lines // 2)
 
 
-@bind(NORMAL, CTRL_U, description="View 1/2 page up")
+@bind(NORMAL, "u", CTRL_U, description="View 1/2 page up")
 def half_page_up(viewer):
     viewer.current_view_line = max(0, viewer.current_view_line - viewer.lines // 2)
 
@@ -199,7 +222,7 @@ def move_line_up(viewer):
     return viewer.focused.move_line_up()
 
 
-@bind(SCROLL, "gg", HOME, description="Scroll to start")
+@bind(SCROLL, "g", HOME, description="Scroll to start")
 def move_all_up(viewer):
     return viewer.focused.move_all_up()
 
@@ -209,22 +232,22 @@ def move_all_down(viewer):
     return viewer.focused.move_all_down()
 
 
-@bind(SCROLL, CTRL_B, PAGEUP, description="Scroll 1 page up")
+@bind(SCROLL, "b", CTRL_B, PAGEUP, description="Scroll 1 page up")
 def move_page_up(viewer):
     return viewer.focused.move_page_up()
 
 
-@bind(SCROLL, CTRL_F, PAGEDOWN, description="Scroll 1 page down")
+@bind(SCROLL, "f", CTRL_F, PAGEDOWN, description="Scroll 1 page down")
 def move_page_down(viewer):
     return viewer.focused.move_page_down()
 
 
-@bind(SCROLL, CTRL_U, description="Scroll 1/2 page up")
+@bind(SCROLL, "u", CTRL_U, description="Scroll 1/2 page up")
 def move_half_page_up(viewer):
     return viewer.focused.move_half_page_up()
 
 
-@bind(SCROLL, CTRL_D, description="Scroll 1/2 page down")
+@bind(SCROLL, "d", CTRL_D, description="Scroll 1/2 page down")
 def move_half_page_down(viewer):
     return viewer.focused.move_half_page_down()
 

@@ -209,7 +209,7 @@ class LinedBuffer:
         for line_num in range(start_line, lines + start_line):
             screen_line = buffer[line_num]
             keys = screen_line.keys()
-            line_length = max(keys) if keys else 0
+            line_length = (max(keys) + 1) if keys else 0
             is_wide_char = False
             current_line_buffer = io.StringIO()
             for x in range(start_column, columns + start_column):

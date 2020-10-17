@@ -11,19 +11,19 @@ def test_buffer_kitchen():
     assert buffer.wrapped_num_lines == 2
     assert buffer.get_num_lines(wrap=False) == 1
     assert buffer.get_num_lines(wrap=True) == 2
-    assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(8, "12345")]
-    assert buffer.get_lines(1, 0, width, 0, wrap=True) == [(4, "12345")]
-    assert buffer.get_lines(2, 0, width, 0, wrap=False) == [(8, "12345"), (0, " " * 5)]
-    assert buffer.get_lines(2, 0, width, 0, wrap=True) == [(4, "12345"), (3, "6789 ")]
-    assert buffer.get_lines(1, 1, width, 0, wrap=True) == [(3, "6789 ")]
-    assert buffer.get_lines(1, 0, width, 3, wrap=False) == [(8, "45678")]
+    assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(9, "12345")]
+    assert buffer.get_lines(1, 0, width, 0, wrap=True) == [(5, "12345")]
+    assert buffer.get_lines(2, 0, width, 0, wrap=False) == [(9, "12345"), (0, " " * 5)]
+    assert buffer.get_lines(2, 0, width, 0, wrap=True) == [(5, "12345"), (4, "6789 ")]
+    assert buffer.get_lines(1, 1, width, 0, wrap=True) == [(4, "6789 ")]
+    assert buffer.get_lines(1, 0, width, 3, wrap=False) == [(9, "45678")]
 
     width = 3
     buffer.width = width
     assert buffer.num_lines == 1
     assert buffer.wrapped_num_lines == 3
-    assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(8, "123")]
-    assert buffer.get_lines(3, 0, width, 0, wrap=True) == [(2, "123"), (2, "456"), (2, "789")]
+    assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(9, "123")]
+    assert buffer.get_lines(3, 0, width, 0, wrap=True) == [(3, "123"), (3, "456"), (3, "789")]
 
     assert buffer.raw_buffer.getvalue() == text
     assert buffer.raw_buffer.tell() == len(text)

@@ -26,9 +26,19 @@ class SetTitle(BoxAction):
         iterator.title = title
 
 
-class Collapse(BoxAction):
+class ToggleCollapse(BoxAction):
+    value = None
+
     def run(self, box_holder):
-        box_holder.box.toggle_collapse(True)
+        box_holder.box.toggle_collapse(self.value)
+
+
+class Collapse(ToggleCollapse):
+    value = True
+
+
+class Expand(ToggleCollapse):
+    value = False
 
 
 @dataclass
