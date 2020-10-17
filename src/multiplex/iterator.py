@@ -1,9 +1,11 @@
 import asyncio
 import fcntl
 import io
+import json
 import os
 import struct
 import termios
+import time
 import types
 import pathlib
 import pty
@@ -31,6 +33,26 @@ async def stream_reader_generator(reader):
             yield b.decode()
         except OSError:
             return
+
+
+async def asciinema_recording_iterator(recording_path):
+    async with aiofiles.open(recording_path, encoding="utf-8") as f:
+        after_first_line = False
+        last_abs_time = time.time()
+        last_rel_time = 0
+        async for line in f:
+            if not after_first_line:
+                after_first_line = True
+                continue
+            rel_time, type_, output = json.loads(line)
+            if type_ != "o":
+                continue
+            abs_time = time.time()
+            sleep_time = (rel_time - last_rel_time) - (abs_time - last_abs_time)
+            await asyncio.sleep(sleep_time)
+            last_rel_time = rel_time
+            last_abs_time = abs_time
+            yield output
 
 
 @dataclass
@@ -67,13 +89,12 @@ def _extract_title(current_title, obj):
     return None
 
 
-def _str_to_iterator(str_value, title, context):
+def _process_str_to_iterator(cmd, context):
     def _setsize(fd):
         cols, rows = ansi.get_size()
         s = struct.pack("HHHH", rows, cols, 0, 0)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, s)
 
-    title = _extract_title(title, str_value)
     master, slave = pty.openpty()
     _setsize(slave)
     env = os.environ.copy()
@@ -84,12 +105,22 @@ def _str_to_iterator(str_value, title, context):
         }
     )
     obj = asyncio.subprocess.create_subprocess_shell(
-        str_value,
+        cmd,
         stdin=slave,
         stdout=slave,
         stderr=slave,
         env=env,
     )
+    return obj, (master, slave)
+
+
+def _str_to_iterator(str_value, title, context):
+    title = _extract_title(title, str_value)
+    master, slave = None, None
+    if str_value.startswith("asciinema://"):
+        obj = asciinema_recording_iterator(str_value.split("://", 1)[1])
+    else:
+        obj, (master, slave) = _process_str_to_iterator(str_value, context)
     return obj, title, (master, slave)
 
 

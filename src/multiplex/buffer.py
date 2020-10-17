@@ -33,6 +33,10 @@ counter = 0
 
 
 class Screen(pyte.Screen):
+    def __init__(self, columns, lines, line_buffer):
+        super().__init__(columns, lines)
+        self.line_buffer = line_buffer
+
     def reset(self):
         original_columns = self.columns
         original_lines = self.lines
@@ -128,6 +132,38 @@ class Screen(pyte.Screen):
 
         self.cursor.attrs = Char(" ", fg=index)
 
+    def erase_in_display(self, how=0, private=False):
+        interval = None
+        if how == 0:
+            interval = range(self.cursor.y + 1, self.line_buffer.num_lines)
+        elif how == 1:
+            interval = range(self.cursor.y)
+        elif how == 2 or how == 3:
+            interval = range(self.line_buffer.num_lines)
+        self.dirty.update(interval)
+        for y in interval:
+            line = self.buffer[y]
+            for x in line:
+                line[x] = self.cursor.attrs
+        if how == 0 or how == 1:
+            self.erase_in_line(how)
+
+    def erase_in_line(self, how=0, private=False):
+        self.dirty.add(self.cursor.y)
+        line = self.buffer[self.cursor.y]
+        keys = line.keys()
+        columns = (max(keys) if keys else 0) + 1
+        interval = None
+        if how == 0:
+            interval = range(self.cursor.x, columns)
+        elif how == 1:
+            interval = range(self.cursor.x + 1)
+        elif how == 2:
+            interval = range(columns)
+        line = self.buffer[self.cursor.y]
+        for x in interval:
+            line[x] = self.cursor.attrs
+
     @property
     def display(self):
         # overriding this so we don't evaluate all virtual lines/columns
@@ -140,7 +176,7 @@ class LinedBuffer:
 
     def __init__(self, width=None):
         self.width = width or self.BIG
-        self.screen = Screen(lines=self.BIG, columns=self.width)
+        self.screen = Screen(lines=self.BIG, columns=self.width, line_buffer=self)
         self.stream = pyte.Stream(screen=self.screen)
         self.max_line = -1
         self.raw_to_self = {}
