@@ -15,6 +15,7 @@ def test_exports():
     assert to_iterator
 
 
+@pytest.mark.skipif("os.environ.get('MULTIPLEX_SOCKET_PATH')", reason="Running in demo")
 async def test_sanity(tmpdir):
     output_dir = tmpdir / "output"
     socket_echo = tmpdir / "socket_loc"
