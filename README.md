@@ -1,6 +1,13 @@
 # multiplex
 View output of multiple processes, in parallel, in the console, with an interactive TUI
 
+## Installation
+```shell script
+pip install multiplex
+# or better yet
+pipx install multiplex
+```
+
 ## Examples
 
 ### Parallel Execution Of Commands
