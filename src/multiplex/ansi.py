@@ -26,22 +26,23 @@ NONE = object()
 RESET = colors.reset_code()
 
 BLACK = (0, 0, 0)
-MAGENTA = (255, 0, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 GRAY = (51, 51, 51)
-CYAN = (0, 200, 200)
+BLUE1 = (37, 94, 132)
+GREEN2 = (184, 212, 67)
 
 
 class Theme:
-    X_COLOR = (RED, NONE)
-    V_COLOR = (GREEN, NONE)
+    X_COLOR = (RED, None)
+    V_COLOR = (GREEN, None)
     TITLE_NORMAL = (GRAY, NONE)
-    TITLE_FOCUS = (CYAN, NONE)
+    TITLE_FOCUS = (BLUE1, NONE)
+    TITLE_STREAM_DONE = (GRAY, NONE)
     STATUS_NORMAL = (NONE, GRAY)
-    STATUS_SCROLL = (BLACK, CYAN)
-    STATUS_SAVE = (BLACK, GREEN)
-    HELP_TITLES = (MAGENTA, NONE)
+    STATUS_SCROLL = (NONE, BLUE1)
+    STATUS_SAVE = (BLACK, GREEN2)
+    HELP_TITLES = (GREEN2, NONE)
 
 
 theme = Theme
@@ -141,16 +142,17 @@ def help_screen(current_line, lines, cols, descriptions):
 
 
 class C:
-    def __init__(self, *args, fg=None, bg=None):
-        self.fg = fg
-        self.bg = bg
+    def __init__(self, *args, color=None):
+        color = color or (None, None)
+        self.color = color
+        self.fg, self.bg = color
         self.parts = []
         for part in args:
             self._add(part)
 
     def copy(self):
         parts = [p.copy() if isinstance(p, C) else p for p in self.parts]
-        return self.__class__(*parts, fg=self.fg, bg=self.bg)
+        return self.__class__(*parts, color=self.color)
 
     def __len__(self):
         return sum(len(p) for p in self.parts)

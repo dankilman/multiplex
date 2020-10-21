@@ -21,6 +21,7 @@ class BoxState:
     def __init__(self, box_height):
         self.wrap = True
         self.auto_scroll = True
+        self.stream_done = False
         self.collapsed = False
         self.buffer_start_line = 0
         self.first_column = 0
@@ -73,7 +74,7 @@ class TextBox:
 
     def update_text(self):
         num_lines = self.num_lines
-        if self.state.auto_scroll:
+        if self.state.auto_scroll and not self.state.stream_done:
             buffer_num_lines = self.buffer.get_num_lines(self.state.wrap)
             buffer_start_line = max(0, buffer_num_lines - num_lines)
             self.state.buffer_start_line = buffer_start_line
@@ -100,8 +101,9 @@ class TextBox:
 
     def move_line_down(self):
         buffer_lines = self.buffer.get_num_lines(self.state.wrap)
+        min_start_line = self.state.buffer_start_line
         max_start_line = buffer_lines - self.num_lines
-        self.state.buffer_start_line = max(0, min(max_start_line, self.state.buffer_start_line + 1))
+        self.state.buffer_start_line = max(min_start_line, min(max_start_line, self.state.buffer_start_line + 1))
         return self.index
 
     def move_all_up(self):
@@ -142,6 +144,20 @@ class TextBox:
             return self.index
         return False
 
+    def move_half_screen_right(self):
+        state = self.state
+        if not state.wrap:
+            state.first_column = min(state.first_column + self.view.cols // 2, self.max_first_column)
+            return self.index
+        return False
+
+    def move_half_screen_left(self):
+        state = self.state
+        if not state.wrap:
+            state.first_column = max(0, state.first_column - self.view.cols // 2)
+            return self.index
+        return False
+
     def move_right_until_end(self):
         state = self.state
         if not state.wrap:
@@ -162,7 +178,7 @@ class TextBox:
         return True
 
     def decrease_box_height(self):
-        self.state.box_height = max(1, self.state.box_height - 1)
+        self.state.box_height = max(0, self.state.box_height - 1)
         self.state.changed_height = True
         return ansi.FULL_REFRESH
 
@@ -177,7 +193,7 @@ class TextBox:
             wrap = self.state.wrap
         self.state.first_column = 0
         self.state.wrap = not wrap
-        if not self.state.auto_scroll:
+        if not self.state.auto_scroll or self.state.stream_done:
             line = self.state.buffer_start_line
             result = self.buffer.convert_line_number(line, from_wrapped=wrap)
             if result is None:
@@ -193,6 +209,11 @@ class TextBox:
             collapsed = not self.state.collapsed
         self.state.collapsed = collapsed
         return ansi.FULL_REFRESH if collapsed else True
+
+    def strip_empty_lines(self, include_not_stream_done=False):
+        if not include_not_stream_done and not self.state.stream_done:
+            return
+        self.state.box_height = min(self.state.box_height, self.buffer.get_num_lines(self.state.wrap))
 
     @property
     def num_lines(self):

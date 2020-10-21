@@ -5,8 +5,9 @@ import tempfile
 from asyncio import StreamWriter, StreamReader
 from random import randint
 
+from multiplex.exceptions import IPCException
 from multiplex.viewer import Viewer
-from multiplex.iterator import Descriptor, MULTIPLEX_SOCKET_PATH
+from multiplex.iterator import Descriptor, MULTIPLEX_SOCKET_PATH, MULTIPLEX_STREAM_ID
 
 
 class Server:
@@ -34,11 +35,16 @@ class Server:
 
     async def _handle_request(self, reader: StreamReader, writer: StreamWriter):
         request = await _read_message(reader)
-        self._handle_message(request)
-        await _write_message({"status": "success"}, writer)
+        try:
+            await self._handle_message(request)
+            response = {"status": "success"}
+        except Exception as e:
+            response = {"status": "failure", "error": str(e)}
+        await _write_message(response, writer)
         writer.close()
+        return response
 
-    def _handle_message(self, message):
+    async def _handle_message(self, message, batch=False):
         action = message.pop("action")
         if action == "split":
             self.viewer.split(**message)
@@ -46,33 +52,52 @@ class Server:
             self.viewer.focused.toggle_collapse(**message)
             self.viewer.events.send_redraw()
         elif action == "add":
-            self.viewer.add(Descriptor(**message))
+            descriptor = Descriptor(**message)
+            handle = self.viewer.add(descriptor)
+            if descriptor.wait:
+                if batch:
+                    return handle
+                else:
+                    await handle
         elif action == "save":
             self.viewer.events.send_save()
         elif action == "quit":
             self.viewer.events.send_quit()
         elif action == "batch":
+            handles = []
             for action in message["actions"]:
-                self._handle_message(action)
+                handle = self._handle_message(action)
+                if handle:
+                    handles.append(handle)
+            if handles:
+                await asyncio.gather(*handles)
 
 
 class Client:
     def __init__(self, socket_path):
         self._socket_path = socket_path
 
-    async def add(self, obj, title, box_height):
-        await self._request(self.add_request_body(obj, title, box_height))
+    async def add(self, obj, title, box_height, wait, cwd, env):
+        await self._request(self.add_request_body(obj, title, box_height, wait, cwd, env))
 
     @staticmethod
-    def add_request_body(obj, title, box_height):
-        return {"action": "add", "obj": obj, "title": title, "box_height": box_height}
+    def add_request_body(obj, title, box_height, wait, cwd, env):
+        return {
+            "action": "add",
+            "obj": obj,
+            "title": title,
+            "box_height": box_height,
+            "wait": wait,
+            "cwd": cwd,
+            "env": env,
+        }
 
-    async def split(self, title, box_height):
-        await self._request(self.split_request_body(title, box_height))
+    async def split(self, title, box_height, stream_id):
+        await self._request(self.split_request_body(title, box_height, stream_id))
 
     @staticmethod
-    def split_request_body(title, box_height):
-        return {"action": "split", "title": title, "box_height": box_height}
+    def split_request_body(title, box_height, stream_id):
+        return {"action": "split", "title": title, "box_height": box_height, "stream_id": stream_id}
 
     async def toggle_collapse(self, value=None):
         await self._request(self.collapse_request_body(value))
@@ -106,6 +131,8 @@ class Client:
         await _write_message(message, writer)
         response = await _read_message(reader)
         writer.close()
+        if response["status"] == "failure":
+            raise IPCException(response["error"])
         return response
 
 
@@ -120,3 +147,7 @@ async def _write_message(message, writer):
 
 def get_env_socket_path():
     return os.environ.get(MULTIPLEX_SOCKET_PATH)
+
+
+def get_env_stream_id():
+    return os.environ.get(MULTIPLEX_STREAM_ID)

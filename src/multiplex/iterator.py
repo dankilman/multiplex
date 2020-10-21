@@ -60,14 +60,19 @@ class Descriptor:
     obj: Any
     title: str
     box_height: int
+    # only relevant for ipc requests
+    wait: bool = False
+    stream_id: str = None
+    cwd: str = None
+    env: dict = None
 
 
 class Iterator:
-    def __init__(self, iterator, title, inner_type):
+    def __init__(self, iterator, title, inner_type, metadata):
         self.iterator = iterator
         self.title = title
         self.inner_type = inner_type
-        self.metadata = {}
+        self.metadata = metadata
 
 
 def _extract_title(current_title, obj):
@@ -77,6 +82,8 @@ def _extract_title(current_title, obj):
         if obj.startswith("file://") or obj.startswith("asciinema://"):
             return obj.split("://")[1]
         return obj
+    if isinstance(obj, pathlib.Path):
+        return str(obj)
     title_attr = getattr(obj, "title", None)
     if title_attr:
         return title_attr
@@ -99,7 +106,8 @@ def _process_str_to_iterator(cmd, context):
 
     master, slave = pty.openpty()
     _setsize(slave)
-    env = os.environ.copy()
+    cwd = context.get("cwd")
+    env = (context.get("env") or os.environ).copy()
     env.update(
         {
             MULTIPLEX_SOCKET_PATH: context.get("socket_path", ""),
@@ -112,6 +120,7 @@ def _process_str_to_iterator(cmd, context):
         stdout=slave,
         stderr=slave,
         env=env,
+        cwd=cwd,
     )
     return obj, (master, slave)
 
@@ -135,9 +144,16 @@ def _coroutine_to_iterator(cor):
     return loop.run_until_complete(cor)
 
 
-def _process_to_iterator(process, title, master, slave):
+def _process_to_iterator(process, title, master, slave, context):
+    handle: asyncio.Future = context.get("handle")
+
     async def exit_stream():
-        await process.wait()
+        exit_code = await process.wait()
+        if handle:
+            if exit_code:
+                handle.set_exception(RuntimeError(f"'{title}' failed with code {exit_code}"))
+            else:
+                handle.set_result(True)
         if slave:
             os.close(slave)
         yield
@@ -159,15 +175,12 @@ def _process_to_iterator(process, title, master, slave):
             streams.extend([stream_reader_generator(reader), exit_stream()])
 
         assert streams
-
-        if len(streams) == 1:
-            stream = streams[0]
-        else:
-            stream = combine.merge(*streams)
-        async for data in stream:
-            yield data
+        stream = combine.merge(*streams)
+        async with stream.stream() as s:
+            async for data in s:
+                yield data
         exit_code = process.returncode if slave else await process.wait()
-        status = C("✗", fg=theme.X_COLOR[0]) if exit_code else C("✓", fg=theme.V_COLOR[0])
+        status = C("✗", color=theme.X_COLOR) if exit_code else C("✓", color=theme.V_COLOR)
         yield BoxActions(
             [
                 UpdateMetadata({"exit_code": exit_code}),
@@ -178,22 +191,30 @@ def _process_to_iterator(process, title, master, slave):
     obj = g()
     title = _extract_title(title, process)
     inner_type = "async_process"
-    return obj, title, inner_type
+
+    def close():
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+
+    return obj, title, inner_type, {"close": close}
 
 
-def _path_to_iterator(file_path):
+def _path_to_iterator(file_path, title):
     async def g():
         async with aiofiles.open(file_path, encoding="utf-8") as f:
             yield await f.read()
 
     obj = g()
-    title = str(file_path)
+    title = _extract_title(title, file_path)
     inner_type = "path"
     return obj, title, inner_type
 
 
 def _controller_to_iterator(controller, title):
     async def g():
+        controller._init()
         while True:
             result = await controller.queue.get()
             if result is STOP:
@@ -258,31 +279,38 @@ async def _to_iterator(obj, title, context):
     if isinstance(obj, types.CoroutineType):
         obj = await obj
 
-    inner_type = "N/A"
     if isinstance(obj, asyncio.streams.StreamReader):
-        obj, title, inner_type = _stream_reader_to_iterator(obj, title)
+        result = _stream_reader_to_iterator(obj, title)
     elif isinstance(obj, types.AsyncGeneratorType):
-        obj, title, inner_type = _async_generator_to_iterator(obj, title)
+        result = _async_generator_to_iterator(obj, title)
     elif isinstance(obj, types.GeneratorType):
-        obj, title, inner_type = _generator_to_iterator(obj, title)
+        result = _generator_to_iterator(obj, title)
     elif hasattr(obj, "__aiter__"):
-        obj, title, inner_type = _async_iterable_to_iterator(obj, title)
+        result = _async_iterable_to_iterator(obj, title)
     elif hasattr(obj, "__iter__"):
-        obj, title, inner_type = _iterable_to_iterator(obj, title)
+        result = _iterable_to_iterator(obj, title)
     elif isinstance(obj, asyncio.subprocess.Process):
-        obj, title, inner_type = _process_to_iterator(obj, title, master, slave)
+        result = _process_to_iterator(obj, title, master, slave, context)
     elif isinstance(obj, pathlib.Path):
-        obj, title, inner_type = _path_to_iterator(obj)
+        result = _path_to_iterator(obj, title)
     elif isinstance(obj, Controller):
-        obj, title, inner_type = _controller_to_iterator(obj, title)
+        result = _controller_to_iterator(obj, title)
+    else:
+        raise RuntimeError(f"Cannot create iterator from {obj}")
+
+    metadata = {}
+    if len(result) == 3:
+        obj, title, inner_type = result
+    else:
+        obj, title, inner_type, metadata = result
 
     if title is None:
         title = "N/A"
 
-    return obj, title, inner_type
+    return obj, title, inner_type, metadata
 
 
 async def to_iterator(obj, title=None, context=None) -> Iterator:
     if obj is SPLIT:
-        return Iterator(SPLIT, title, "split")
+        return Iterator(SPLIT, title, "split", {})
     return Iterator(*(await _to_iterator(obj, title, context or {})))

@@ -3,6 +3,7 @@ import logging
 import types
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 import aiostream
 
@@ -18,7 +19,7 @@ from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
 from multiplex.help import HelpViewState
 from multiplex.iterator import Descriptor
-from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN, OUTPUT_SAVED, SAVE
+from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN, OUTPUT_SAVED, SAVE, STREAM_DONE
 
 logger = logging.getLogger("multiplex.view")
 
@@ -58,6 +59,7 @@ class DescriptorQueueItem:
     descriptor: Descriptor
     redraw: bool
     num_boxes: int
+    handle: Any = None
 
 
 class Viewer:
@@ -65,6 +67,7 @@ class Viewer:
         self.holders = []
         self.stream_id_to_holder = {}
         self.holder_to_stream_id = {}
+        self.loop = asyncio.get_event_loop()
         self.input_reader = keys_input.InputReader(viewer=self, bindings=keys.bindings)
         self.descriptors_queue: "asyncio.Queue[DescriptorQueueItem]" = asyncio.Queue()
         self.help = HelpViewState(self)
@@ -83,28 +86,35 @@ class Viewer:
         self.stopped = False
         self.output_saved = False
         for i, descriptor in enumerate(descriptors):
-            self.add(descriptor, redraw=False, num_boxes=len(descriptors))
-            self.events.send_redraw()
+            redraw = i + 1 == len(descriptors)
+            self.add(descriptor, redraw=redraw, num_boxes=len(descriptors))
 
     def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
+        handle = None
+        if descriptor.wait:
+            handle = asyncio.Future()
+
         def action():
             self.descriptors_queue.put_nowait(
                 DescriptorQueueItem(
                     descriptor=descriptor,
                     redraw=redraw,
                     num_boxes=num_boxes,
+                    handle=handle,
                 )
             )
 
         if thread_safe:
-            asyncio.get_event_loop().call_soon_threadsafe(action)
+            self.loop.call_soon_threadsafe(action)
         else:
             action()
 
-    def split(self, title, box_height=None):
+        return handle
+
+    def split(self, title, box_height, stream_id):
         self.descriptors_queue.put_nowait(
             DescriptorQueueItem(
-                descriptor=Descriptor(SPLIT, title, box_height),
+                descriptor=Descriptor(SPLIT, title, box_height, stream_id=stream_id),
                 redraw=True,
                 num_boxes=None,
             )
@@ -181,18 +191,12 @@ class Viewer:
 
     async def _main(self):
         self._init()
-        try:
-            async with aiostream.stream.advanced.flatten(self._sources()).stream() as streamer:
-                async for obj, output in streamer:
-                    try:
-                        await self._handle_event(obj, output)
-                    except EndViewer:
-                        return
-        except RuntimeError as e:
-            # not sure what's the cause, but occasionally this is raised during
-            # aiostream context manager __aexit__, so we silently ignore
-            if "StopAsyncIteration" not in str(e):
-                raise
+        async with aiostream.stream.advanced.flatten(self._sources()).stream() as streamer:
+            async for obj, output in streamer:
+                try:
+                    await self._handle_event(obj, output)
+                except EndViewer:
+                    return
 
     async def _sources(self):
         yield self.input_reader.read()
@@ -208,14 +212,18 @@ class Viewer:
         descriptor = descriptor_queue_item.descriptor
         redraw = descriptor_queue_item.redraw
         recalc_num_boxes = descriptor_queue_item.num_boxes
+        handle = descriptor_queue_item.handle
         index = self.num_boxes
         stream_id = str(uuid.uuid4())
         iterator = await to_iterator(
             obj=descriptor.obj,
             title=descriptor.title,
             context={
+                "handle": handle,
                 "socket_path": self.socket_path,
                 "stream_id": stream_id,
+                "cwd": descriptor.cwd,
+                "env": descriptor.env,
             },
         )
         box_height = descriptor.box_height or self.box_height
@@ -226,7 +234,12 @@ class Viewer:
         if redraw and not self.is_scrolling:
             self.events.send_all_down()
         if iterator.iterator is SPLIT:
-            stream_id = self.holder_to_stream_id.pop(id(self.get_holder(index - 1)))
+            if descriptor.stream_id:
+                previous_holder = self.stream_id_to_holder[descriptor.stream_id]
+            else:
+                previous_holder = self.get_holder(index - 1)
+            previous_holder.state.stream_done = True
+            stream_id = self.holder_to_stream_id.pop(id(previous_holder))
         self.holder_to_stream_id[id(holder)] = stream_id
         self.stream_id_to_holder[stream_id] = holder
         if iterator.iterator is not SPLIT:
@@ -236,6 +249,7 @@ class Viewer:
     async def _wrapped_iterator(stream_id, iterator):
         async for elem in iterator:
             yield stream_id, elem
+        yield stream_id, STREAM_DONE
 
     def _init(self):
         self._update_lines_cols()
@@ -323,6 +337,8 @@ class Viewer:
                 data.run(self.get_holder(i))
             elif callable(data):
                 data(self.get_holder(i))
+            elif data is STREAM_DONE:
+                self.get_state(i).stream_done = True
             else:
                 self.get_buffer(i).write(data)
         if self.help.show:
@@ -378,10 +394,11 @@ class Viewer:
         if location != ViewLocation.IN_VIEW:
             return
 
-        iterator = self.get_iterator(index)
+        holder = self.get_holder(index)
+        iterator = holder.iterator
+        box_state = holder.state
         suffix = ""
         if self.verbose:
-            box_state = self.get_state(index)
             wrap = box_state.wrap
             auto_scroll = box_state.auto_scroll
             collapsed = box_state.collapsed
@@ -400,11 +417,16 @@ class Viewer:
         if hr_space + title_len + suffix_len > self.cols:
             title = title[: self.cols - suffix_len - len(_ellipsis) - hr_space]
             title += _ellipsis
-        text = C(" ", title, suffix, " ", fg=NONE, bg=NONE)
+        text = C(" ", title, suffix, " ", color=(NONE, NONE))
 
         logger.debug(f"s{index}:\t{screen_y}\t{location}\t[{self.lines},{self.cols}]")
 
-        hline_color = ansi.theme.TITLE_FOCUS if index == self.current_focused_box else ansi.theme.TITLE_NORMAL
+        if index == self.current_focused_box:
+            hline_color = ansi.theme.TITLE_FOCUS
+        elif box_state.stream_done:
+            hline_color = ansi.theme.TITLE_STREAM_DONE
+        else:
+            hline_color = ansi.theme.TITLE_NORMAL
         ansi.title(
             row=screen_y,
             text=text,
@@ -417,7 +439,8 @@ class Viewer:
             return
 
         focused = self.focused
-        iterator = self.get_iterator(focused.index)
+        index = focused.index
+        iterator = self.get_iterator(index)
         title = iterator.title
         box_state = focused.state
         wrap = box_state.wrap
@@ -449,15 +472,18 @@ class Viewer:
         if pending_text:
             pending_text = f"{pending_text} "
 
+        prefix = f"[{index + 1}] "
+        prefix_len = len(prefix)
+
         if not isinstance(title, C):
             title = C(title)
         title_len = len(title)
         mode_len = len(mode_paren)
         pending_len = len(pending_text)
-        space_between = self.cols - title_len - mode_len - pending_len
+        space_between = self.cols - title_len - mode_len - pending_len - prefix_len
         if space_between < 0:
             _ellipsis = "... "
-            title = title[: (self.cols - mode_len) - len(_ellipsis)]
+            title = title[: (self.cols - mode_len - pending_len - prefix_len) - len(_ellipsis)]
             title += _ellipsis
             space_between = 0
         if self.output_saved:
@@ -466,7 +492,7 @@ class Viewer:
             color = ansi.theme.STATUS_SCROLL
         else:
             color = ansi.theme.STATUS_NORMAL
-        text = C(title, " " * space_between, pending_text, mode_paren, fg=color[0], bg=color[1])
+        text = C(prefix, title, " " * space_between, pending_text, mode_paren, color=color)
 
         ansi.status_bar(
             row=self.get_status_bar_line(),
