@@ -8,6 +8,7 @@ pip install multiplex
 pipx install multiplex
 ```
 
+Python 3.7 or greater is required.
 ## Examples
 
 ### Parallel Execution Of Commands
@@ -115,3 +116,18 @@ mp.run()
 Type `?` to toggle the help screen.
 
 ![help](http://multiplex-static-files.s3-website-us-east-1.amazonaws.com/help.png)
+
+## Why Not Tmux? 
+In short, they solve different problems.
+
+`tmux` is a full blown terminal emulator multiplexer.
+`multiplex` on the other hand, tries to optimize for a smooth experience in navigating output from several sources.
+
+`tmux` doesn't have any notion of scrolling panes. That is to say, the layout contains all panes at any
+given moment (unless maximized).
+In `multiplex`, current view will display boxes that fit current view, but you can have many more, 
+and move around boxes using `less` inspired keys such as `j`, `k`, `g`, `G`, etc...
+
+Another aspect is that keybindigs for moving around are much more ergonomic (as they are in `less`) because
+`multiplex` is not a full terminal emulator, so it can afford using single letter keyboard bindings (e.g. `g` for
+go to beginning)
