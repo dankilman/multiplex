@@ -3,7 +3,7 @@ import shutil
 
 import pyte
 from pyte import graphics as g
-from pyte.screens import Char, wcwidth
+from pyte.screens import Char, wcwidth, Margins
 
 from multiplex.ansi import CSI
 
@@ -163,6 +163,17 @@ class Screen(pyte.Screen):
         line = self.buffer[self.cursor.y]
         for x in interval:
             line[x] = self.cursor.attrs
+
+    def reverse_index(self):
+        lines = self.line_buffer.num_lines
+        top, bottom = self.margins or Margins(0, lines - 1)
+        if self.cursor.y == top:
+            self.dirty.update(range(lines))
+            for y in range(bottom, top, -1):
+                self.buffer[y] = self.buffer[y - 1]
+            self.buffer.pop(top, None)
+        else:
+            self.cursor_up()
 
     @property
     def display(self):
