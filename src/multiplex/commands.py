@@ -1,13 +1,8 @@
-import os
-import string
-from datetime import datetime
-
-import aiofiles
 from multiplex.keys import *
 
 from .exceptions import EndViewer
 
-from .ansi import FULL_REFRESH, C
+from .ansi import FULL_REFRESH
 
 
 # toggles
@@ -67,22 +62,7 @@ def strip_empty_lines(viewer):
 
 @bind(GLOBAL, "O", description="Dump boxes to output_dir (default: $PWD)")
 async def save(viewer):
-    now = datetime.now()
-    dir_name = f"output-{now.strftime('%Y-%m-%dT%H-%M-%S')}"
-    output_dir = os.path.join(viewer.output_path, dir_name)
-    os.makedirs(output_dir, exist_ok=True)
-    valid_chars = string.ascii_letters + string.digits
-    holders = viewer.holders
-    zero_padding = 1 if len(holders) < 10 else 2
-    for index, holder in enumerate(holders):
-        title = holder.iterator.title
-        title = title.to_string(no_style=True) if isinstance(title, C) else str(title)
-        title = "".join(c for c in title if c in valid_chars).lower()
-        file_name = f"{str(index + 1).zfill(zero_padding)}-{title}"
-        async with aiofiles.open(os.path.join(output_dir, file_name), "w") as f:
-            await f.write(holder.buffer.raw_buffer.getvalue())
-    viewer.output_saved = True
-    viewer.events.send_output_saved()
+    await viewer.export.save()
 
 
 @bind(GLOBAL, "?", description="Show/hide this help screen")

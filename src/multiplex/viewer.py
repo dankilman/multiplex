@@ -17,6 +17,7 @@ from multiplex.ansi import C, NONE
 from multiplex.box import BoxHolder
 from multiplex.enums import ViewLocation, BoxLine
 from multiplex.exceptions import EndViewer
+from multiplex.export import Export
 from multiplex.help import HelpViewState
 from multiplex.iterator import Descriptor
 from multiplex.refs import REDRAW, RECALC, SPLIT, QUIT, ALL_DOWN, OUTPUT_SAVED, SAVE, STREAM_DONE
@@ -40,6 +41,9 @@ class ViewerEvents:
 
     def send_redraw(self):
         self.queue.put_nowait((REDRAW, None))
+
+    def send_recalc(self, num_boxes):
+        self.queue.put_nowait((RECALC, num_boxes))
 
     def send_quit(self):
         self.queue.put_nowait((QUIT, None))
@@ -72,6 +76,7 @@ class Viewer:
         self.descriptors_queue: "asyncio.Queue[DescriptorQueueItem]" = asyncio.Queue()
         self.help = HelpViewState(self)
         self.events = ViewerEvents()
+        self.export = Export(self)
         self.box_height = box_height
         self.verbose = verbose
         self.socket_path = socket_path
@@ -80,13 +85,16 @@ class Viewer:
         self.current_view_line = 0
         self.maximized = False
         self.collaped_all = False
-        self.wrapped_all = False
+        self.wrapped_all = True
         self.cols = None
         self.lines = None
         self.stopped = False
         self.output_saved = False
+        self.initial_add(descriptors)
+
+    def initial_add(self, descriptors):
         for i, descriptor in enumerate(descriptors):
-            redraw = i + 1 == len(descriptors)
+            redraw = i == 0 or i + 1 == len(descriptors)
             self.add(descriptor, redraw=redraw, num_boxes=len(descriptors))
 
     def add(self, descriptor, thread_safe=False, redraw=True, num_boxes=None):
@@ -119,6 +127,9 @@ class Viewer:
                 num_boxes=None,
             )
         )
+
+    async def load(self, export_dir):
+        await self.export.load(export_dir)
 
     def swap_indices(self, index1, index2):
         holder1 = self.get_holder(index1)
@@ -228,10 +239,17 @@ class Viewer:
         )
         box_height = descriptor.box_height or self.box_height
         holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
+        state = holder.state
+        if descriptor.wrap is not None:
+            state.wrap = descriptor.wrap
+        if descriptor.collapsed is not None:
+            state.collapsed = descriptor.collapsed
         self.holders.append(holder)
-        event = (REDRAW, None) if redraw else (RECALC, recalc_num_boxes)
-        self.events.send(event)
-        if redraw and not self.is_scrolling:
+        if redraw:
+            self.events.send_redraw()
+        else:
+            self.events.send_recalc(recalc_num_boxes)
+        if redraw and not self.is_scrolling and descriptor.scroll_down:
             self.events.send_all_down()
         if iterator.iterator is SPLIT:
             if descriptor.stream_id:

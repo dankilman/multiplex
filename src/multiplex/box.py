@@ -93,7 +93,8 @@ class TextBox:
         )
         self.state.text = "\n".join(line for _, line in lines)
         if not self.state.wrap:
-            self.state.view_longest_line = max(line_length for line_length, _ in lines)
+            value = max(line_length for line_length, _ in lines) if lines else 0
+            self.state.view_longest_line = value
 
     def move_line_up(self):
         self.state.buffer_start_line = max(0, self.state.buffer_start_line - 1)
@@ -190,9 +191,9 @@ class TextBox:
         if value is not None:
             wrap = value
         else:
-            wrap = self.state.wrap
+            wrap = not self.state.wrap
         self.state.first_column = 0
-        self.state.wrap = not wrap
+        self.state.wrap = wrap
         if not self.state.auto_scroll or self.state.stream_done:
             line = self.state.buffer_start_line
             result = self.buffer.convert_line_number(line, from_wrapped=wrap)

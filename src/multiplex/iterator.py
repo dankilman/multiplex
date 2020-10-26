@@ -60,6 +60,9 @@ class Descriptor:
     obj: Any
     title: str
     box_height: int
+    wrap: bool = None
+    collapsed: bool = None
+    scroll_down: bool = False
     # only relevant for ipc requests
     wait: bool = False
     stream_id: str = None
