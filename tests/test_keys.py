@@ -109,4 +109,4 @@ def test_bind_seq_to_name_description():
     def fn1():
         pass
 
-    assert descriptions[mode][("a^[",)] == "fn1"
+    assert descriptions[mode][("aEsc",)] == "fn1"

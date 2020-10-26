@@ -164,6 +164,9 @@ class Screen(pyte.Screen):
         for x in interval:
             line[x] = self.cursor.attrs
 
+    def index(self):
+        self.cursor_down()
+
     def reverse_index(self):
         lines = self.line_buffer.num_lines
         top, bottom = self.margins or Margins(0, lines - 1)
@@ -302,6 +305,10 @@ class Buffer:
     @property
     def wrapped_num_lines(self):
         return self.get_num_lines(True)
+
+    def get_cursor(self, wrap):
+        cursor = self._get_buffer(wrap).screen.cursor
+        return cursor.x, cursor.y
 
     def _get_buffer(self, wrap):
         return self.wrapping_buffer if wrap else self.lined_buffer

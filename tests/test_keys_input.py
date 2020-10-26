@@ -3,22 +3,23 @@ from functools import partial
 from unittest import mock
 from unittest.mock import Mock
 
-from multiplex.keys import bind as _bind, HELP, SCROLL, NORMAL, GLOBAL
+from multiplex.keys import bind as _bind, HELP, SCROLL, NORMAL, GLOBAL, INPUT
 from multiplex.keys_input import InputReader
 
 
-def _test_set(show_help=False, auto_scroll=True):
-    bindings = {GLOBAL: {}, NORMAL: {}, HELP: {}, SCROLL: {}}
-    descriptions = {GLOBAL: {}, NORMAL: {}, HELP: {}, SCROLL: {}}
+def _test_set(show_help=False, auto_scroll=True, input_mode=False):
+    bindings = {GLOBAL: {}, NORMAL: {}, HELP: {}, SCROLL: {}, INPUT: {}}
+    descriptions = {GLOBAL: {}, NORMAL: {}, HELP: {}, SCROLL: {}, INPUT: {}}
     bind = partial(_bind, custom_bindings=bindings, custom_descriptions=descriptions)
-    viewer = MockViewer(show_help, auto_scroll)
+    viewer = MockViewer(show_help, auto_scroll, input_mode)
     return bind, InputReader(viewer, bindings)
 
 
 class MockViewer:
-    def __init__(self, show_help=False, auto_scroll=True):
-        self.focused = MockBox(auto_scroll)
+    def __init__(self, show_help=False, auto_scroll=True, input_mode=False):
         self.help = MockHelp(show_help)
+        self.is_input_mode = input_mode
+        self.is_scrolling = not auto_scroll
 
 
 class MockHelp:
@@ -40,11 +41,14 @@ class MockBoxState:
 def _test_process_single_found_sequence(mode):
     show_help = mode == HELP
     auto_scroll = mode != SCROLL
-    bind, reader = _test_set(show_help, auto_scroll)
+    input_mode = mode == INPUT
+    bind, reader = _test_set(show_help, auto_scroll, input_mode)
 
     @bind(mode, "a")
     def fn1():
         pass
+
+    expected = [fn1]
 
     if mode != GLOBAL:
 
@@ -52,7 +56,14 @@ def _test_process_single_found_sequence(mode):
         def fn2():
             pass
 
-    assert reader._process([ord("a")]) == ([fn1], [])
+        @bind(GLOBAL, "b")
+        def fn3():
+            pass
+
+        if mode != INPUT:
+            expected.append(fn3)
+
+    assert reader._process([ord("a"), ord("b")]) == (expected, [])
 
 
 def test_process_single_found_sequence_normal():
@@ -61,6 +72,10 @@ def test_process_single_found_sequence_normal():
 
 def test_process_single_found_sequence_scroll():
     _test_process_single_found_sequence(SCROLL)
+
+
+def test_process_single_found_sequence_input():
+    _test_process_single_found_sequence(INPUT)
 
 
 def test_process_single_found_sequence_help():

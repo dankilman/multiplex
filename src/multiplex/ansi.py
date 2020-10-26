@@ -31,6 +31,7 @@ GREEN = (0, 255, 0)
 GRAY = (51, 51, 51)
 BLUE1 = (37, 94, 132)
 GREEN2 = (184, 212, 67)
+ORANGE = (240, 140, 52)
 
 
 class Theme:
@@ -41,6 +42,7 @@ class Theme:
     TITLE_STREAM_DONE = (GRAY, NONE)
     STATUS_NORMAL = (NONE, GRAY)
     STATUS_SCROLL = (NONE, BLUE1)
+    STATUS_INPUT = (BLACK, ORANGE)
     STATUS_SAVE = (BLACK, GREEN2)
     HELP_TITLES = (GREEN2, NONE)
 
@@ -107,6 +109,18 @@ def status_bar(row, text):
     prnt(screen.clear_line_code(row))
     prnt(text)
     prnt(RESET)
+
+
+def move_cursor(col, row):
+    prnt(cursor.locate_code(col, row))
+
+
+def show_cursor():
+    prnt(cursor.show_code())
+
+
+def hide_cursor():
+    prnt(cursor.hide_code())
 
 
 def help_screen(current_line, lines, cols, descriptions):
