@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import List
 
-from multiplex.ansi import C
 from multiplex.refs import SPLIT
 
 

@@ -37,6 +37,6 @@ async def test_sanity(tmpdir):
     output_dir = output_dir.listdir()[0]
     expected = ["1", "2", ""]
     listing = output_dir.listdir(sort=True)
-    assert len(listing) == len(expected)
+    assert len(listing) == len(expected) + 1
     for i, ex in enumerate(expected):
         assert listing[i].read_text("utf-8").strip() == ex

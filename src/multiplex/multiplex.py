@@ -16,15 +16,15 @@ class Multiplex:
         self.server = Server()
         self.viewer: Viewer = None
 
-    def run(self):
+    def run(self, load=None):
         try:
-            asyncio.run(self.run_async())
+            asyncio.run(self.run_async(load))
         except KeyboardInterrupt:
             pass
         finally:
             self.cleanup()
 
-    async def run_async(self):
+    async def run_async(self, load=None):
         assert not self.viewer
         self.viewer = Viewer(
             descriptors=self.descriptors,
@@ -33,6 +33,8 @@ class Multiplex:
             socket_path=self.server.socket_path,
             output_path=self.output_path,
         )
+        if load:
+            await self.viewer.load(load)
         await self.server.start(viewer=self.viewer)
         try:
             await self.viewer.run()
@@ -40,7 +42,7 @@ class Multiplex:
             self.server.stop()
 
     def add(self, obj, title=None, box_height=None, thread_safe=False):
-        descriptor = Descriptor(obj=obj, title=title, box_height=box_height)
+        descriptor = Descriptor(obj=obj, title=title, box_height=box_height, scroll_down=self.viewer is not None)
         self.descriptors.append(descriptor)
         if self.viewer:
             self.viewer.add(descriptor, thread_safe=thread_safe)

@@ -9,12 +9,14 @@ from multiplex.ipc import get_env_socket_path, Client, get_env_stream_id
 from multiplex.multiplex import Multiplex
 
 
-async def ipc_mode(socket_path, process, title, box_height, wait):
+async def ipc_mode(socket_path, process, title, box_height, wait, load):
     client = Client(socket_path)
-    first = process[0]
+    first = process[0] if not load else None
     env = os.environ.copy()
     cwd = os.getcwd()
-    if first == "@":
+    if load:
+        await client.load(load)
+    elif first == "@":
         stream_id = get_env_stream_id()
         title = title[0] or " ".join(process[1:])
         await client.split(title, box_height[0], stream_id)
@@ -34,18 +36,24 @@ async def ipc_mode(socket_path, process, title, box_height, wait):
         await client.batch(actions)
 
 
-def direct_mode(process, title, verbose, box_height, output_path):
+def direct_mode(process, title, verbose, box_height, output_path, load):
     multiplex = Multiplex(verbose=verbose, box_height=box_height[0], output_path=output_path)
     for p, t, h in zip(process, cycle(title), cycle(box_height)):
         multiplex.add(p, title=t, box_height=h)
-    multiplex.run()
+    multiplex.run(load)
     for iterator in multiplex.viewer.iterators:
         exit_code = iterator.metadata.get("exit_code")
         if exit_code:
             sys.exit(exit_code)
 
 
-def validate(box_height, process, socket_path, title, wait):
+def validate(box_height, process, socket_path, title, wait, load):
+    if load:
+        if not os.path.isdir(load):
+            raise click.ClickException(f"No such dir: {load}")
+        if not os.path.exists(os.path.join(load, "metadata.json")):
+            raise click.ClickException(f"Invalid directory: {load}")
+        return
     if not process:
         raise click.ClickException("At least one command is required")
     if title and len(title) != len(process):
@@ -78,10 +86,11 @@ def validate(box_height, process, socket_path, title, wait):
     default=os.getcwd(),
     envvar="MULTIPLEX_OUTPUT_PATH",
 )
+@click.option("-l", "--load")
 @click.help_option("-h", "--help")
 @click.version_option(None, "--version")
 @click.option("-v", "--verbose", is_flag=True)
-def main(process, title, verbose, box_height, output_path, wait):
+def main(process, title, verbose, box_height, output_path, wait, load):
     socket_path = get_env_socket_path()
 
     validate(
@@ -90,6 +99,7 @@ def main(process, title, verbose, box_height, output_path, wait):
         socket_path=socket_path,
         title=title,
         wait=wait,
+        load=load,
     )
 
     title = title or [None]
@@ -105,6 +115,7 @@ def main(process, title, verbose, box_height, output_path, wait):
                     title=title,
                     box_height=box_height,
                     wait=wait,
+                    load=load,
                 )
             )
         except IPCException as e:
@@ -116,4 +127,5 @@ def main(process, title, verbose, box_height, output_path, wait):
             verbose=verbose,
             box_height=box_height,
             output_path=output_path,
+            load=load,
         )

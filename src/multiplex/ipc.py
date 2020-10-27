@@ -52,7 +52,7 @@ class Server:
             self.viewer.focused.toggle_collapse(**message)
             self.viewer.events.send_redraw()
         elif action == "add":
-            descriptor = Descriptor(**message)
+            descriptor = Descriptor(**message, scroll_down=True)
             handle = self.viewer.add(descriptor)
             if descriptor.wait:
                 if batch:
@@ -61,6 +61,8 @@ class Server:
                     await handle
         elif action == "save":
             self.viewer.events.send_save()
+        elif action == "load":
+            await self.viewer.load(**message)
         elif action == "quit":
             self.viewer.events.send_quit()
         elif action == "batch":
@@ -112,6 +114,13 @@ class Client:
     @staticmethod
     def save_request_body():
         return {"action": "save"}
+
+    async def load(self, export_dir):
+        await self._request(self.load_request_body(export_dir))
+
+    @staticmethod
+    def load_request_body(export_dir):
+        return {"action": "load", "export_dir": export_dir}
 
     async def quit(self):
         await self._request(self.quit_request_body())
