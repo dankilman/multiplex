@@ -21,6 +21,7 @@ class BoxState:
     def __init__(self, box_height):
         self.wrap = True
         self.auto_scroll = True
+        self.input_mode = False
         self.stream_done = False
         self.collapsed = False
         self.buffer_start_line = 0
@@ -187,18 +188,28 @@ class TextBox:
         self.state.auto_scroll = not self.state.auto_scroll
         return True
 
+    def activate_input_mode(self):
+        self.state.input_mode = True
+        ansi.show_cursor()
+        return True
+
+    def exit_input_mode(self):
+        self.state.input_mode = False
+        ansi.hide_cursor()
+        return True
+
     def toggle_wrap(self, value=None):
-        if value is not None:
-            wrap = value
-        else:
-            wrap = not self.state.wrap
+        initial_value = self.state.wrap
+        new_value = value if value is not None else not initial_value
+        if initial_value == new_value:
+            return False
         self.state.first_column = 0
-        self.state.wrap = wrap
+        self.state.wrap = new_value
         if not self.state.auto_scroll or self.state.stream_done:
             line = self.state.buffer_start_line
-            result = self.buffer.convert_line_number(line, from_wrapped=wrap)
+            result = self.buffer.convert_line_number(line, from_wrapped=initial_value)
             if result is None:
-                logger.warning(f"No mathing line for conversion wrap: {wrap}, line: {line}")
+                logger.warning(f"No mathing line for conversion wrap: {new_value}, line: {line}")
                 result = 0
             self.state.buffer_start_line = result
         return True

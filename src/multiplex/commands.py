@@ -11,6 +11,13 @@ def toggle_auto_scroll(viewer):
     return viewer.focused.toggle_auto_scroll()
 
 
+@bind(GLOBAL, "i", description="Activate input mode for currently focused box")
+def activate_input_mode(viewer):
+    if viewer.focused.state.stream_done:
+        return
+    return viewer.focused.activate_input_mode()
+
+
 @bind(GLOBAL, "w", description="Toggle wrap/unwrap for currently focused box")
 def toggle_wrap(viewer):
     return viewer.focused.toggle_wrap()
@@ -230,6 +237,11 @@ def move_half_page_up(viewer):
 @bind(SCROLL, "d", CTRL_D, description="Scroll 1/2 page down")
 def move_half_page_down(viewer):
     return viewer.focused.move_half_page_down()
+
+
+@bind(INPUT, CTRL__, description="Exit input mode")
+def exit_input_mode(viewer):
+    return viewer.focused.exit_input_mode()
 
 
 # help mode

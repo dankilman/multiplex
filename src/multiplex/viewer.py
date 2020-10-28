@@ -321,9 +321,11 @@ class Viewer:
         elif isinstance(obj, str):
             holder = self.stream_id_to_holder[obj]
             self._update_box(holder.index, output)
-            if isinstance(output, BoxAction) or callable(output):
+            if isinstance(output, BoxAction) or callable(output) or output is STREAM_DONE:
                 ansi.clear()
                 self._update_view()
+            if self.is_input_mode:
+                self._update_cursor()
         else:
             key_changed = False
             boxes_changed = set()
@@ -345,20 +347,22 @@ class Viewer:
                 self._update_status_bar()
                 for index in boxes_changed:
                     self._update_box(index, data=None)
-            else:
+            elif not self.is_input_mode:
                 self._update_status_bar()
         ansi.flush()
 
     def _update_box(self, i, data):
         if data is not None:
+            holder = self.get_holder(i)
             if isinstance(data, BoxAction):
-                data.run(self.get_holder(i))
+                data.run(holder)
             elif callable(data):
-                data(self.get_holder(i))
+                data(holder)
             elif data is STREAM_DONE:
-                self.get_state(i).stream_done = True
+                holder.state.stream_done = True
+                holder.box.exit_input_mode()
             else:
-                self.get_buffer(i).write(data)
+                holder.buffer.write(data)
         if self.help.show:
             return
         self._update_title_line(i)
@@ -392,6 +396,7 @@ class Viewer:
             self._update_status_bar()
             self._update_title_lines()
             self._update_boxes()
+            self._update_cursor()
 
     def _update_boxes(self):
         if self.maximized:
@@ -420,10 +425,16 @@ class Viewer:
             wrap = box_state.wrap
             auto_scroll = box_state.auto_scroll
             collapsed = box_state.collapsed
+            input_mode = box_state.input_mode
             buffer_line = box_state.buffer_start_line
             box_height = box_state.box_height
-            state = f"{'W' if wrap else '-'}{'-' if auto_scroll else 'S'}{'C' if collapsed else '-'}"
-            state = f"{state} [{buffer_line},{box_height}]"
+            state = [
+                "W" if wrap else "-",
+                "-" if auto_scroll else "S",
+                "C" if collapsed else "-",
+                "I" if input_mode else "-",
+            ]
+            state = f"{''.join(state)} [{buffer_line},{box_height}]"
             suffix = f" [{state}]"
         suffix_len = len(suffix)
         title = iterator.title
@@ -463,6 +474,7 @@ class Viewer:
         box_state = focused.state
         wrap = box_state.wrap
         auto_scroll = box_state.auto_scroll
+        input_mode = box_state.input_mode
 
         modes = []
         if not auto_scroll:
@@ -471,6 +483,8 @@ class Viewer:
             modes.append("MAXIMIZED")
         if wrap:
             modes.append("WRAP")
+        if input_mode:
+            modes.append("INPUT")
         mode = "|".join(modes)
         mode_paren = f"({mode})" if mode else ""
 
@@ -506,6 +520,8 @@ class Viewer:
             space_between = 0
         if self.output_saved:
             color = ansi.theme.STATUS_SAVE
+        elif input_mode:
+            color = ansi.theme.STATUS_INPUT
         elif not auto_scroll:
             color = ansi.theme.STATUS_SCROLL
         else:
@@ -516,6 +532,20 @@ class Viewer:
             row=self.get_status_bar_line(),
             text=text,
         )
+
+    def _update_cursor(self):
+        if not self.is_input_mode:
+            return
+        box = self.focused
+        screen_y, view_location = self.get_box_top_line(box.index)
+        if view_location != ViewLocation.IN_VIEW:
+            return
+        col, row = box.buffer.get_cursor(box.state.wrap)
+        row += screen_y
+        row -= box.state.buffer_start_line
+        if row < 0 or col < 0:
+            return
+        ansi.move_cursor(col, row)
 
     def verify_focused_box_in_view(self):
         if self.maximized:
@@ -540,6 +570,10 @@ class Viewer:
     @property
     def is_scrolling(self):
         return not self.focused.state.auto_scroll
+
+    @property
+    def is_input_mode(self):
+        return self.focused.state.input_mode
 
     @property
     def max_current_line(self):

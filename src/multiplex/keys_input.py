@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import os
 import sys
 import select
@@ -41,10 +42,14 @@ class InputReader:
         if not _has_data():
             return None
         skip_process = False
+        is_input = self.viewer.is_input_mode
+        keys = []
         while _has_data():
             key = os.read(sys.stdin.fileno(), 1)
             key_ord = ord(key)
-            if key_ord in _keys.BACKSPACE_OR_DEL:
+            if is_input:
+                keys.append(key)
+            if not is_input and key_ord in _keys.BACKSPACE_OR_DEL:
                 self.pending = self.pending[:-1]
                 skip_process = True
                 break
@@ -55,18 +60,34 @@ class InputReader:
             self.pending = pending
         else:
             result = []
+        if is_input and keys:
+            result.append(functools.partial(self._read_input_handler, keys))
         return result
+
+    @staticmethod
+    async def _read_input_handler(keys, viewer):
+        if not viewer.is_input_mode:
+            return
+        writer = viewer.focused.holder.iterator.metadata.get("input")
+        if not writer:
+            return
+        writer.write(b"".join(keys))
+        await writer.drain()
 
     def _process(self, keys):
         viewer = self.viewer
         bindings = self.bindings
         if viewer.help.show:
             mode = _keys.HELP
-        elif not viewer.focused.state.auto_scroll:
+        elif viewer.is_input_mode:
+            mode = _keys.INPUT
+        elif viewer.is_scrolling:
             mode = _keys.SCROLL
         else:
             mode = _keys.NORMAL
-        sequences = [bindings[mode], bindings[_keys.GLOBAL]]
+        sequences = [bindings[mode]]
+        if mode != _keys.INPUT:
+            sequences.append(bindings[_keys.GLOBAL])
 
         result = []
         while keys:

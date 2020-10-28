@@ -170,12 +170,16 @@ def _process_to_iterator(process, title, master, slave, context):
         if isinstance(stderr, asyncio.streams.StreamReader):
             streams.append(stream_reader_generator(stderr))
         if master:
+            loop = asyncio.get_running_loop()
             assert slave
-            reader_pipe = io.open(master, "rb", 0)
+            pipe = io.open(master, "w+b", 0)
             reader = asyncio.StreamReader()
             reader_protocol = asyncio.StreamReaderProtocol(reader)
-            await asyncio.get_running_loop().connect_read_pipe(lambda: reader_protocol, reader_pipe)
+            await loop.connect_read_pipe(lambda: reader_protocol, pipe)
             streams.extend([stream_reader_generator(reader), exit_stream()])
+            writer_transport, writer_protocol = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, pipe)
+            writer = asyncio.StreamWriter(writer_transport, writer_protocol, reader, loop)
+            yield UpdateMetadata({"input": writer})
 
         assert streams
         stream = combine.merge(*streams)

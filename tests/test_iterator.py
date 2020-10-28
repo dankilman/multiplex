@@ -24,6 +24,7 @@ async def collect(source):
 @pytest.fixture
 def patch_actions(monkeypatch):
     monkeypatch.setattr(_iterator, "BoxActions", lambda *_, **__: ACTION)
+    monkeypatch.setattr(_iterator, "UpdateMetadata", lambda *_, **__: ACTION)
 
 
 async def test_async_generator_input():
@@ -235,7 +236,7 @@ async def test_str_process(patch_actions):
     iterator = await to_iterator(cmd)
     assert iterator.inner_type == "async_process"
     assert iterator.title == cmd
-    await assert_aiter(iterator.iterator, ["hello", None, ACTION])
+    await assert_aiter(iterator.iterator, [ACTION, "hello", None, ACTION])
 
 
 async def test_str_path(tmp_path):
@@ -259,7 +260,7 @@ async def test_setsize(patch_actions, monkeypatch):
     assert iterator.inner_type == "async_process"
     assert iterator.title == cmd
     items = await collect(iterator.iterator)
-    assert items[0].strip() == f"{rows} {cols}"
+    assert items[1].strip() == f"{rows} {cols}"
 
 
 async def test_controller():

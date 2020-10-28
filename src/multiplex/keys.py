@@ -45,7 +45,6 @@ CTRL_TO_NAME = {
     CTRL_F: "F",
     CTRL_U: "U",
     CTRL_D: "D",
-    CTRL__: "[",
 }
 
 UP_NAME = "↑"
@@ -67,6 +66,7 @@ SEQ_TO_NAME = {
     tuple(CTRL_DOWN): f"^{DOWN_NAME}",
     tuple(CTRL_LEFT): f"^{LEFT_NAME}",
     tuple(CTRL_RIGHT): f"^{RIGHT_NAME}",
+    tuple(CTRL__): "Esc",
     tuple(ALT_UP): f"{ALT_NAME}{UP_NAME}",
     tuple(ALT_DOWN): f"{ALT_NAME}{DOWN_NAME}",
     tuple(ALT_LEFT): f"{ALT_NAME}{LEFT_NAME}",
@@ -77,12 +77,14 @@ SEQ_TO_NAME = {
 
 NORMAL = "normal"
 SCROLL = "scroll"
+INPUT = "input"
 GLOBAL = "global"
 HELP = "help"
 
 bindings = {
     NORMAL: {},
     SCROLL: {},
+    INPUT: {},
     GLOBAL: {},
     HELP: {},
 }
@@ -91,6 +93,7 @@ descriptions = {
     HELP: {},
     NORMAL: {},
     SCROLL: {},
+    INPUT: {},
     GLOBAL: {},
 }
 
