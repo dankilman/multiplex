@@ -229,7 +229,7 @@ class TextBox:
 
     @property
     def num_lines(self):
-        return self.view.get_max_box_line() if self.is_maximized else self.state.box_height
+        return self.view.lines - 1 if self.is_maximized else self.state.box_height
 
     @property
     def is_focused(self):
