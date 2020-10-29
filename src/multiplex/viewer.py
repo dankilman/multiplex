@@ -605,9 +605,9 @@ class Viewer:
             if index != self.current_focused_box:
                 return 0, ViewLocation.NOT_FOCUSED
             if box_line == BoxLine.TITLE:
-                screen_y = 0
+                return 0, ViewLocation.NOT_FOCUSED
             elif box_line == BoxLine.TOP:
-                screen_y = 1
+                screen_y = 0
             elif box_line == BoxLine.BOTTOM:
                 screen_y = self.get_max_box_line()
             else:
