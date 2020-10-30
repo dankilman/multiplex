@@ -25,7 +25,12 @@ def toggle_wrap(viewer):
 
 @bind(GLOBAL, "W", description="Toggle wrap/unwrap for all boxes")
 def toggle_wrap_all(viewer):
-    new_value = not viewer.wrapped_all
+    if all(box.state.wrap for box in viewer.boxes):
+        new_value = False
+    elif not any(box.state.wrap for box in viewer.boxes):
+        new_value = True
+    else:
+        new_value = not viewer.wrapped_all
     for box in viewer.boxes:
         box.toggle_wrap(new_value)
     viewer.wrapped_all = new_value
