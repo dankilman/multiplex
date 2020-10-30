@@ -1,6 +1,7 @@
 import asyncio
 
-from multiplex.actions import SetTitle, Collapse, Expand, ToggleCollapse
+from multiplex.actions import SetTitle, ToggleCollapse, ToggleWrap
+from multiplex.refs import STOP
 
 
 class Controller:
@@ -30,10 +31,22 @@ class Controller:
         self.write(SetTitle(title))
 
     def collapse(self):
-        self.write(Collapse())
+        self.write(ToggleCollapse(True))
 
     def expand(self):
-        self.write(Expand())
+        self.write(ToggleCollapse(False))
 
     def toggle_collapse(self):
         self.write(ToggleCollapse())
+
+    def wrap(self):
+        self.write(ToggleWrap(True))
+
+    def nowrap(self):
+        self.write(ToggleWrap(False))
+
+    def toggle_wrap(self):
+        self.write(ToggleWrap())
+
+    def done(self):
+        self.write(STOP)

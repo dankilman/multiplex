@@ -26,18 +26,19 @@ class SetTitle(BoxAction):
 
 
 class ToggleCollapse(BoxAction):
-    value = None
+    def __init__(self, value=None):
+        self.value = value
 
     def run(self, box_holder):
         box_holder.box.toggle_collapse(self.value)
 
 
-class Collapse(ToggleCollapse):
-    value = True
+class ToggleWrap(BoxAction):
+    def __init__(self, value=None):
+        self.value = value
 
-
-class Expand(ToggleCollapse):
-    value = False
+    def run(self, box_holder):
+        box_holder.box.toggle_wrap(self.value)
 
 
 @dataclass

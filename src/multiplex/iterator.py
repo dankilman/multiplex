@@ -225,6 +225,7 @@ def _controller_to_iterator(controller, title):
         while True:
             result = await controller.queue.get()
             if result is STOP:
+                controller.queue.task_done()
                 break
             yield result
             controller.queue.task_done()
