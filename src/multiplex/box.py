@@ -12,7 +12,7 @@ class BoxHolder:
         self.id = id(self)
         self.index = index
         self.iterator = iterator
-        self.buffer = Buffer()
+        self.buffer = Buffer(buffer_lines=viewer.buffer_lines)
         self.state = BoxState(box_height)
         self.box = TextBox(viewer, self)
 
@@ -74,22 +74,13 @@ class TextBox:
         )
 
     def update_text(self):
-        num_lines = self.num_lines
         if self.state.auto_scroll and not self.state.stream_done:
-            buffer_num_lines = self.buffer.get_num_lines(self.state.wrap)
-            buffer_start_line = max(0, buffer_num_lines - num_lines)
-            self.state.buffer_start_line = buffer_start_line
-        else:
-            buffer_start_line = self.state.buffer_start_line
-
-        cols = self.view.cols
-        start_column = self.state.first_column
-
+            self.state.buffer_start_line = self.max_start_line
         lines = self.buffer.get_lines(
-            lines=num_lines,
-            start_line=buffer_start_line,
-            columns=cols,
-            start_column=start_column,
+            lines=self.num_view_lines,
+            start_line=self.state.buffer_start_line,
+            columns=self.view.cols,
+            start_column=self.state.first_column,
             wrap=self.state.wrap,
         )
         self.state.text = "\n".join(line for _, line in lines)
@@ -98,81 +89,72 @@ class TextBox:
             self.state.view_longest_line = value
 
     def move_line_up(self):
-        self.state.buffer_start_line = max(0, self.state.buffer_start_line - 1)
-        return self.index
+        return self.set_minmax_up_motion(self.state.buffer_start_line - 1)
 
     def move_line_down(self):
-        buffer_lines = self.buffer.get_num_lines(self.state.wrap)
-        min_start_line = self.state.buffer_start_line
-        max_start_line = buffer_lines - self.num_lines
-        self.state.buffer_start_line = max(min_start_line, min(max_start_line, self.state.buffer_start_line + 1))
-        return self.index
+        return self.set_minmax_down_motion(self.state.buffer_start_line + 1)
+
+    def move_page_up(self):
+        return self.set_minmax_up_motion(self.state.buffer_start_line - self.num_view_lines)
+
+    def move_page_down(self):
+        return self.set_minmax_down_motion(self.state.buffer_start_line + self.num_view_lines)
+
+    def move_half_page_up(self):
+        return self.set_minmax_up_motion(self.state.buffer_start_line - self.num_view_lines // 2)
+
+    def move_half_page_down(self):
+        return self.set_minmax_down_motion(self.state.buffer_start_line + self.num_view_lines // 2)
 
     def move_all_up(self):
-        self.state.buffer_start_line = 0
+        self.state.buffer_start_line = self.min_start_line
         return self.index
 
     def move_all_down(self):
         self.state.buffer_start_line = self.max_start_line
         return self.index
 
-    def move_page_up(self):
-        self.state.buffer_start_line = max(0, self.state.buffer_start_line - self.num_lines)
-        return self.index
-
-    def move_page_down(self):
-        self.state.buffer_start_line = min(self.max_start_line, self.state.buffer_start_line + self.num_lines)
-        return self.index
-
-    def move_half_page_up(self):
-        self.state.buffer_start_line = max(0, self.state.buffer_start_line - self.num_lines // 2)
-        return self.index
-
-    def move_half_page_down(self):
-        self.state.buffer_start_line = min(self.max_start_line, self.state.buffer_start_line + self.num_lines // 2)
-        return self.index
-
     def move_right(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = min(state.first_column + 1, self.max_first_column)
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = min(state.first_column + 1, self.max_first_column)
+        return self.index
 
     def move_left(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = max(0, state.first_column - 1)
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = max(0, state.first_column - 1)
+        return self.index
 
     def move_half_screen_right(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = min(state.first_column + self.view.cols // 2, self.max_first_column)
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = min(state.first_column + self.view.cols // 2, self.max_first_column)
+        return self.index
 
     def move_half_screen_left(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = max(0, state.first_column - self.view.cols // 2)
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = max(0, state.first_column - self.view.cols // 2)
+        return self.index
 
     def move_right_until_end(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = self.max_first_column
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = self.max_first_column
+        return self.index
 
     def move_left_until_start(self):
         state = self.state
-        if not state.wrap:
-            state.first_column = 0
-            return self.index
-        return False
+        if state.wrap:
+            return False
+        state.first_column = 0
+        return self.index
 
     def increase_box_height(self):
         self.state.box_height = min(self.view.get_max_box_line(), self.state.box_height + 1)
@@ -225,10 +207,10 @@ class TextBox:
     def strip_empty_lines(self, include_not_stream_done=False):
         if not include_not_stream_done and not self.state.stream_done:
             return
-        self.state.box_height = min(self.state.box_height, self.buffer.get_num_lines(self.state.wrap))
+        self.state.box_height = min(self.state.box_height, self.num_buffer_lines)
 
     @property
-    def num_lines(self):
+    def num_view_lines(self):
         return self.view.lines - 1 if self.is_maximized else self.state.box_height
 
     @property
@@ -258,6 +240,33 @@ class TextBox:
         return max(0, self.state.view_longest_line - self.view.cols)
 
     @property
+    def num_buffer_lines(self):
+        buffer_min_line = self.buffer.get_min_line(self.state.wrap)
+        buffer_max_line = self.buffer.get_max_line(self.state.wrap)
+        return buffer_max_line - buffer_min_line + 1
+
+    @property
+    def min_start_line(self):
+        return self.buffer.get_min_line(self.state.wrap)
+
+    @property
     def max_start_line(self):
-        buffer_lines = self.buffer.get_num_lines(self.state.wrap)
-        return buffer_lines - self.num_lines
+        buffer_min_line = self.buffer.get_min_line(self.state.wrap)
+        buffer_max_line = self.buffer.get_max_line(self.state.wrap)
+        return max(buffer_min_line, buffer_max_line - self.num_view_lines + 1)
+
+    def set_minmax_down_motion(self, value):
+        return self._set_min_max_motion(value, self.state.buffer_start_line)
+
+    def set_minmax_up_motion(self, value):
+        return self._set_min_max_motion(value, self.min_start_line)
+
+    def set_width(self, width):
+        raw_line = self.buffer.wrapping_buffer.self_to_raw.get(self.state.buffer_start_line, 0)
+        self.buffer.width = width
+        if self.state.wrap and (not self.state.auto_scroll or self.state.stream_done):
+            self.state.buffer_start_line = self.buffer.wrapping_buffer.raw_to_self[raw_line]
+
+    def _set_min_max_motion(self, value, min_value):
+        self.state.buffer_start_line = max(min_value, min(self.max_start_line, value))
+        return self.index

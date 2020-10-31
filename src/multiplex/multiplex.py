@@ -8,12 +8,13 @@ from multiplex.ipc import Server
 
 
 class Multiplex:
-    def __init__(self, verbose=False, box_height=None, output_path=None):
+    def __init__(self, verbose=False, box_height=None, output_path=None, socket_path=None, buffer_lines=None):
         self.descriptors: List[Descriptor] = []
         self.verbose = verbose
         self.box_height = box_height
+        self.buffer_lines = buffer_lines
         self.output_path = output_path or os.getcwd()
-        self.server = Server()
+        self.server = Server(socket_path)
         self.viewer: Viewer = None
 
     def run(self, load=None):
@@ -32,6 +33,7 @@ class Multiplex:
             box_height=self.box_height,
             socket_path=self.server.socket_path,
             output_path=self.output_path,
+            buffer_lines=self.buffer_lines,
         )
         if load:
             await self.viewer.load(load)

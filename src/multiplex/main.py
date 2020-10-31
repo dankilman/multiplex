@@ -5,7 +5,8 @@ from itertools import cycle
 
 import click
 from multiplex.exceptions import IPCException
-from multiplex.ipc import get_env_socket_path, Client, get_env_stream_id
+from multiplex.ipc import Client, get_env_stream_id
+from multiplex.iterator import MULTIPLEX_SOCKET_PATH
 from multiplex.multiplex import Multiplex
 
 
@@ -36,8 +37,14 @@ async def ipc_mode(socket_path, process, title, box_height, wait, load):
         await client.batch(actions)
 
 
-def direct_mode(process, title, verbose, box_height, output_path, load):
-    multiplex = Multiplex(verbose=verbose, box_height=box_height[0], output_path=output_path)
+def direct_mode(process, title, verbose, box_height, output_path, load, socket_path, buffer_lines):
+    multiplex = Multiplex(
+        verbose=verbose,
+        box_height=box_height[0],
+        output_path=output_path,
+        socket_path=socket_path,
+        buffer_lines=buffer_lines,
+    )
     for p, t, h in zip(process, cycle(title), cycle(box_height)):
         multiplex.add(p, title=t, box_height=h)
     multiplex.run(load)
@@ -79,6 +86,13 @@ def validate(box_height, process, socket_path, title, wait, load):
 @click.option("-t", "--title", multiple=True)
 @click.option("-b", "--box-height", type=int, multiple=True)
 @click.option("--wait/--no-wait", "-w/-W", multiple=True)
+@click.option("-l", "--load")
+@click.option(
+    "--buffer-lines",
+    type=int,
+    envvar="MULTIPLEX_BUFFER_LINES",
+    help="By default, buffer length is unbounded. Use this to have a maximum number of lines for each " "buffer.",
+)
 @click.option(
     "-o",
     "--output-path",
@@ -86,13 +100,21 @@ def validate(box_height, process, socket_path, title, wait, load):
     default=os.getcwd(),
     envvar="MULTIPLEX_OUTPUT_PATH",
 )
-@click.option("-l", "--load")
+@click.option(
+    "-s",
+    "--socket-path",
+    envvar=MULTIPLEX_SOCKET_PATH,
+)
+@click.option(
+    "--server",
+    is_flag=True,
+    help="This should only be used when socket path is provided explicity to instantiate the server. "
+    "Otherwise, the command is assumed to be executed in IPC mode",
+)
 @click.help_option("-h", "--help")
 @click.version_option(None, "--version")
 @click.option("-v", "--verbose", is_flag=True)
-def main(process, title, verbose, box_height, output_path, wait, load):
-    socket_path = get_env_socket_path()
-
+def main(process, title, verbose, box_height, output_path, wait, load, socket_path, buffer_lines, server):
     validate(
         box_height=box_height,
         process=process,
@@ -106,7 +128,7 @@ def main(process, title, verbose, box_height, output_path, wait, load):
     box_height = box_height or [None]
     wait = wait or [True]
 
-    if socket_path:
+    if socket_path and not server:
         try:
             asyncio.run(
                 ipc_mode(
@@ -128,4 +150,6 @@ def main(process, title, verbose, box_height, output_path, wait, load):
             box_height=box_height,
             output_path=output_path,
             load=load,
+            socket_path=socket_path,
+            buffer_lines=buffer_lines,
         )

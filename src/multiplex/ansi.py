@@ -231,3 +231,15 @@ class C:
             if not part.bg:
                 part.bg = self.bg
         self.parts.append(part)
+
+    def to_dict(self):
+        return {
+            "color": self.color,
+            "parts": [p.to_dict() if isinstance(p, C) else p for p in self.parts],
+        }
+
+    @staticmethod
+    def from_dict(dct):
+        color = dct["color"]
+        parts = [C.from_dict(p) if isinstance(p, dict) else p for p in dct["parts"]]
+        return C(*parts, color=color)

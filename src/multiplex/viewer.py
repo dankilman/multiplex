@@ -67,7 +67,7 @@ class DescriptorQueueItem:
 
 
 class Viewer:
-    def __init__(self, descriptors, box_height, verbose, socket_path, output_path):
+    def __init__(self, descriptors, box_height, verbose, socket_path, output_path, buffer_lines):
         self.holders = []
         self.stream_id_to_holder = {}
         self.holder_to_stream_id = {}
@@ -78,6 +78,7 @@ class Viewer:
         self.events = ViewerEvents()
         self.export = Export(self)
         self.box_height = box_height
+        self.buffer_lines = buffer_lines
         self.verbose = verbose
         self.socket_path = socket_path
         self.output_path = output_path
@@ -270,19 +271,20 @@ class Viewer:
         yield stream_id, STREAM_DONE
 
     def _init(self):
-        self._update_lines_cols()
+        changed_cols, _ = self._update_lines_cols()
         if not self.holders:
             return
         ansi.clear()
-        self._update_holders()
+        self._update_holders(changed_cols=changed_cols)
         self._update_view()
         ansi.flush()
 
-    def _update_holders(self, num_boxes=None):
+    def _update_holders(self, num_boxes=None, changed_cols=None):
         num_boxes = num_boxes or self.num_boxes
         default_box_height = max(MIN_BOX_HEIGHT, (self.lines - num_boxes - 1) // num_boxes)
         for holder in self.holders:
-            holder.buffer.width = self.cols
+            if changed_cols:
+                holder.box.set_width(self.cols)
             if not holder.state.changed_height:
                 holder.state.box_height = default_box_height
 
@@ -292,10 +294,11 @@ class Viewer:
         prev_lines = self.lines
         self.cols = cols
         self.lines = lines
-        changed = prev_cols != self.cols or prev_lines != self.lines
-        if changed:
+        changed_cols = prev_cols != self.cols
+        changed_lines = prev_lines != self.lines
+        if changed_cols or changed_lines:
             logger.debug(f"sizes: prev [{prev_lines}, {prev_cols}], new [{self.lines}, {self.cols}]")
-        return changed
+        return changed_cols, changed_lines
 
     async def _handle_event(self, obj, output):
         if obj is REDRAW:

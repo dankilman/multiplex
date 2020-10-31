@@ -7,10 +7,8 @@ def test_buffer_kitchen():
     assert buffer.width == width
     text = "123456789"
     buffer.write(text)
-    assert buffer.num_lines == 1
-    assert buffer.wrapped_num_lines == 2
-    assert buffer.get_num_lines(wrap=False) == 1
-    assert buffer.get_num_lines(wrap=True) == 2
+    assert buffer.get_max_line(wrap=False) == 0
+    assert buffer.get_max_line(wrap=True) == 1
     assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(9, "12345")]
     assert buffer.get_lines(1, 0, width, 0, wrap=True) == [(5, "12345")]
     assert buffer.get_lines(2, 0, width, 0, wrap=False) == [(9, "12345"), (0, " " * 5)]
@@ -20,13 +18,12 @@ def test_buffer_kitchen():
 
     width = 3
     buffer.width = width
-    assert buffer.num_lines == 1
-    assert buffer.wrapped_num_lines == 3
+    assert buffer.get_max_line(wrap=False) == 0
+    assert buffer.get_max_line(wrap=True) == 2
     assert buffer.get_lines(1, 0, width, 0, wrap=False) == [(9, "123")]
     assert buffer.get_lines(3, 0, width, 0, wrap=True) == [(3, "123"), (3, "456"), (3, "789")]
 
     assert buffer.raw_buffer.getvalue() == text
-    assert buffer.raw_buffer.tell() == len(text)
 
     buffer.write("\nabcd")
     assert buffer.convert_line_number(0, from_wrapped=False) == 0
