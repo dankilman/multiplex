@@ -10,7 +10,7 @@ from colors.colors import _color_code as cc
 
 from multiplex import ansi
 from multiplex import Multiplex, Controller
-from multiplex.logging import init_logging
+from multiplex.log import init_logging
 
 
 def run_simple():
