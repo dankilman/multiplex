@@ -39,7 +39,7 @@ class Export:
                 await f.write(holder.buffer.raw_buffer.getvalue())
             metadata["boxes"].append(
                 {
-                    "title": initial_title,
+                    "title": initial_title.to_dict() if isinstance(initial_title, C) else initial_title,
                     "box_height": state.box_height,
                     "collapsed": state.collapsed,
                     "wrap": state.wrap,
@@ -59,7 +59,7 @@ class Export:
             [
                 Descriptor(
                     obj=f"file://{export_dir}/{box['filename']}",
-                    title=box["title"],
+                    title=C.from_dict(box["title"]) if isinstance(box["title"], dict) else box["title"],
                     box_height=box["box_height"],
                     collapsed=box["collapsed"],
                     wrap=box["wrap"],

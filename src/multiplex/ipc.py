@@ -7,12 +7,12 @@ from random import randint
 
 from multiplex.exceptions import IPCException
 from multiplex.viewer import Viewer
-from multiplex.iterator import Descriptor, MULTIPLEX_SOCKET_PATH, MULTIPLEX_STREAM_ID
+from multiplex.iterator import Descriptor, MULTIPLEX_STREAM_ID
 
 
 class Server:
-    def __init__(self):
-        self.socket_path = f"{tempfile.gettempdir()}/multiplex-{randint(100000, 999999)}"
+    def __init__(self, socket_path=None):
+        self.socket_path = socket_path or f"{tempfile.gettempdir()}/multiplex-{randint(100000, 999999)}"
         self.viewer: Viewer = None
         self.server = None
         self.server_task = None
@@ -152,10 +152,6 @@ async def _read_message(reader):
 async def _write_message(message, writer):
     writer.write(f"{json.dumps(message)}\n".encode())
     await writer.drain()
-
-
-def get_env_socket_path():
-    return os.environ.get(MULTIPLEX_SOCKET_PATH)
 
 
 def get_env_stream_id():

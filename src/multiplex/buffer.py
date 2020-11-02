@@ -1,3 +1,4 @@
+import collections
 import io
 import shutil
 
@@ -135,11 +136,11 @@ class Screen(pyte.Screen):
     def erase_in_display(self, how=0, private=False):
         interval = None
         if how == 0:
-            interval = range(self.cursor.y + 1, self.line_buffer.num_lines)
+            interval = range(self.cursor.y + 1, self.line_buffer.max_lines + 1)
         elif how == 1:
             interval = range(self.cursor.y)
         elif how == 2 or how == 3:
-            interval = range(self.line_buffer.num_lines)
+            interval = range(self.line_buffer.min_line, self.line_buffer.max_lines + 1)
         self.dirty.update(interval)
         for y in interval:
             line = self.buffer[y]
@@ -168,10 +169,11 @@ class Screen(pyte.Screen):
         self.cursor_down()
 
     def reverse_index(self):
-        lines = self.line_buffer.num_lines
-        top, bottom = self.margins or Margins(0, lines - 1)
+        max_line = self.line_buffer.max_line
+        min_line = self.line_buffer.min_line
+        top, bottom = self.margins or Margins(min_line, max_line)
         if self.cursor.y == top:
-            self.dirty.update(range(lines))
+            self.dirty.update(range(min_line, max_line + 1))
             for y in range(bottom, top, -1):
                 self.buffer[y] = self.buffer[y - 1]
             self.buffer.pop(top, None)
@@ -192,17 +194,14 @@ class LinedBuffer:
         self.width = width or self.BIG
         self.screen = Screen(lines=self.BIG, columns=self.width, line_buffer=self)
         self.stream = pyte.Stream(screen=self.screen)
-        self.max_line = -1
+        self.max_line = 0
+        self.min_line = 0
         self.raw_to_self = {}
         self.self_to_raw = {}
 
     def write(self, data):
         self.stream.feed(data)
         return self._update()
-
-    @property
-    def num_lines(self):
-        return self.max_line + 1
 
     def _update(self):
         dirty = self.screen.dirty
@@ -213,10 +212,15 @@ class LinedBuffer:
             return dirty_list
         return []
 
+    def remove_lines(self, lines, start_line):
+        new_min_line = start_line + lines
+        for i in range(start_line, new_min_line):
+            self.screen.buffer.pop(i, None)
+        return new_min_line
+
     def get_lines(self, lines, start_line, columns, start_column):
         result = []
-        num_lines = self.num_lines
-        if start_line > num_lines - 1:
+        if start_line > self.max_line:
             return result
         last_char_meta_index = 0
         buffer = self.screen.buffer
@@ -248,9 +252,46 @@ class LinedBuffer:
         return result
 
 
+class CappedRawBuffer:
+    def __init__(self, buffer_lines):
+        self._deque = collections.deque(maxlen=buffer_lines + 1)
+
+    def write(self, data):
+        if self._deque:
+            data = self._deque.pop() + data
+        self._deque.append(data)
+
+    def writeline(self, line):
+        self._deque.append(line)
+
+    def newline(self):
+        pass
+
+    def getvalue(self):
+        return "\n".join(self._deque)
+
+
+class UncappedRawBuffer:
+    def __init__(self):
+        self._io = io.StringIO()
+
+    def write(self, data):
+        self._io.write(data)
+
+    def writeline(self, line):
+        self._io.write(line)
+
+    def newline(self):
+        self._io.write("\n")
+
+    def getvalue(self):
+        return self._io.getvalue()
+
+
 class Buffer:
-    def __init__(self, width=None):
-        self.raw_buffer = io.StringIO()
+    def __init__(self, width=None, buffer_lines=None):
+        self.buffer_lines = buffer_lines
+        self.raw_buffer = CappedRawBuffer(buffer_lines) if buffer_lines else UncappedRawBuffer()
         self.raw_lines = 0
         self.lined_buffer = LinedBuffer()
         self.wrapping_buffer = self._new_wrapping_buffer(width)
@@ -259,7 +300,7 @@ class Buffer:
     def _new_wrapping_buffer(width):
         return LinedBuffer(width or shutil.get_terminal_size().columns)
 
-    def get_lines(self, lines, start_line, columns, start_column, wrap=False):
+    def get_lines(self, lines, start_line, columns, start_column, wrap):
         return self._get_buffer(wrap).get_lines(
             lines=lines,
             start_line=start_line,
@@ -268,23 +309,40 @@ class Buffer:
         )
 
     def write(self, data, buffers=None, skip_raw=False):
-        if not skip_raw:
-            self.raw_buffer.write(data)
         buffers = buffers or (self.lined_buffer, self.wrapping_buffer)
         lines = data.split("\n")
         for i, line in enumerate(lines):
-            if not skip_raw and i:
-                self.raw_lines += 1
+            if not skip_raw:
+                if i:
+                    self.raw_lines += 1
+                    self.raw_buffer.writeline(line)
+                else:
+                    self.raw_buffer.write(line)
+                if i < len(lines) - 1:
+                    self.raw_buffer.newline()
+                current_raw_line = self.raw_lines
+            else:
+                current_raw_line = self.raw_lines - len(lines) + i + 1
             if i < len(lines) - 1:
                 maybe_slash_r = "" if line and line[-1] == "\r" else "\r"
                 line = f"{line}{maybe_slash_r}\n"
-            current_raw_line = self.raw_lines if not skip_raw else i
             for buffer in buffers:
                 dirty_lines = buffer.write(line)
                 if dirty_lines:
                     buffer.raw_to_self[current_raw_line] = dirty_lines[0]
                     for dl in dirty_lines:
                         buffer.self_to_raw[dl] = current_raw_line
+            if not skip_raw and self.buffer_lines:
+                lined_buffer = self.lined_buffer
+                wrapping_buffer = self.wrapping_buffer
+                total_lines = lined_buffer.max_line - lined_buffer.min_line + 1
+                if total_lines > self.buffer_lines:
+                    remove_lined = total_lines - self.buffer_lines
+                    lined_buffer.min_line = lined_buffer.remove_lines(remove_lined, lined_buffer.min_line)
+                    remove_wrapping = (
+                        self.convert_line_number(lined_buffer.min_line, fail_on_error=True) - wrapping_buffer.min_line
+                    )
+                    wrapping_buffer.min_line = wrapping_buffer.remove_lines(remove_wrapping, wrapping_buffer.min_line)
 
     @property
     def width(self):
@@ -295,16 +353,11 @@ class Buffer:
         self.wrapping_buffer = self._new_wrapping_buffer(value)
         self.write(self.raw_buffer.getvalue(), skip_raw=True, buffers=[self.wrapping_buffer])
 
-    def get_num_lines(self, wrap=False):
-        return self._get_buffer(wrap).num_lines
+    def get_min_line(self, wrap):
+        return self._get_buffer(wrap).min_line
 
-    @property
-    def num_lines(self):
-        return self.get_num_lines(False)
-
-    @property
-    def wrapped_num_lines(self):
-        return self.get_num_lines(True)
+    def get_max_line(self, wrap):
+        return self._get_buffer(wrap).max_line
 
     def get_cursor(self, wrap):
         cursor = self._get_buffer(wrap).screen.cursor
@@ -313,15 +366,21 @@ class Buffer:
     def _get_buffer(self, wrap):
         return self.wrapping_buffer if wrap else self.lined_buffer
 
-    def convert_line_number(self, line_number, from_wrapped=False):
+    def convert_line_number(self, line_number, from_wrapped=False, fail_on_error=False):
         from_buffer = self.wrapping_buffer if from_wrapped else self.lined_buffer
         to_buffer = self.lined_buffer if from_wrapped else self.wrapping_buffer
         raw_line_number = from_buffer.self_to_raw.get(line_number)
         if raw_line_number is None:
-            # TODO log warning
-            return 0
+            if fail_on_error:
+                raise RuntimeError(f"No raw line for line {line_number}")
+            else:
+                # TODO log warning
+                return 0
         to_line_number = to_buffer.raw_to_self.get(raw_line_number)
         if to_line_number is None:
-            # TODO log warning
-            return 0
+            if fail_on_error:
+                raise RuntimeError(f"No to_line for raw_line {raw_line_number} [line={line_number}]")
+            else:
+                # TODO log warning
+                return 0
         return to_line_number
