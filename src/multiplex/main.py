@@ -153,3 +153,7 @@ def main(process, title, verbose, box_height, output_path, wait, load, socket_pa
             socket_path=socket_path,
             buffer_lines=buffer_lines,
         )
+
+
+if __name__ == "__main__":
+    main()
