@@ -67,7 +67,7 @@ class DescriptorQueueItem:
 
 
 class Viewer:
-    def __init__(self, descriptors, box_height, verbose, socket_path, output_path, buffer_lines):
+    def __init__(self, descriptors, box_height, auto_collapse, verbose, socket_path, output_path, buffer_lines):
         self.holders = []
         self.stream_id_to_holder = {}
         self.holder_to_stream_id = {}
@@ -78,6 +78,7 @@ class Viewer:
         self.events = ViewerEvents()
         self.export = Export(self)
         self.box_height = box_height
+        self.auto_collapse = auto_collapse
         self.buffer_lines = buffer_lines
         self.verbose = verbose
         self.socket_path = socket_path
@@ -239,7 +240,7 @@ class Viewer:
             },
         )
         box_height = descriptor.box_height or self.box_height
-        holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
+        holder = BoxHolder(index, iterator=iterator, box_height=box_height, auto_collapse=self.auto_collapse, viewer=self)
         state = holder.state
         if descriptor.wrap is not None:
             state.wrap = descriptor.wrap
