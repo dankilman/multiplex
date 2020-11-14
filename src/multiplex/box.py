@@ -177,7 +177,7 @@ class TextBox:
         return True
 
     def exit_input_mode(self):
-        if self.state.auto_collapse:
+        if self.state.auto_collapse and self.holder.iterator.metadata["exit_code"] == 0:
             self.toggle_collapse(value=True)
         self.state.input_mode = False
         ansi.hide_cursor()
