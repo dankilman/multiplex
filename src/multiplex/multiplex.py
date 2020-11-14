@@ -8,7 +8,9 @@ from multiplex.ipc import Server
 
 
 class Multiplex:
-    def __init__(self, verbose=False, box_height=None, auto_collapse=False, output_path=None, socket_path=None, buffer_lines=None):
+    def __init__(
+        self, verbose=False, box_height=None, auto_collapse=False, output_path=None, socket_path=None, buffer_lines=None
+    ):
         self.descriptors: List[Descriptor] = []
         self.verbose = verbose
         self.box_height = box_height

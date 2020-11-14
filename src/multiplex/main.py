@@ -99,7 +99,7 @@ def validate(box_height, process, socket_path, title, wait, load):
     "--auto-collapse/--no-auto-collapse",
     type=bool,
     envvar="MULTIPLEX_AUTO_COLLAPSE",
-    help="Collapse buffers automatically upon successful completion"
+    help="Collapse buffers automatically upon successful completion",
 )
 @click.option(
     "-o",
@@ -122,7 +122,9 @@ def validate(box_height, process, socket_path, title, wait, load):
 @click.help_option("-h", "--help")
 @click.version_option(None, "--version")
 @click.option("-v", "--verbose", is_flag=True)
-def main(process, title, verbose, box_height, auto_collapse, output_path, wait, load, socket_path, buffer_lines, server):
+def main(
+    process, title, verbose, box_height, auto_collapse, output_path, wait, load, socket_path, buffer_lines, server
+):
     validate(
         box_height=box_height,
         process=process,
