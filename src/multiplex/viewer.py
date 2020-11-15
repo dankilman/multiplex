@@ -240,9 +240,7 @@ class Viewer:
             },
         )
         box_height = descriptor.box_height or self.box_height
-        holder = BoxHolder(
-            index, iterator=iterator, box_height=box_height, viewer=self
-        )
+        holder = BoxHolder(index, iterator=iterator, box_height=box_height, viewer=self)
         state = holder.state
         if descriptor.wrap is not None:
             state.wrap = descriptor.wrap
