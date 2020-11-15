@@ -37,10 +37,11 @@ async def ipc_mode(socket_path, process, title, box_height, wait, load):
         await client.batch(actions)
 
 
-def direct_mode(process, title, verbose, box_height, output_path, load, socket_path, buffer_lines):
+def direct_mode(process, title, verbose, box_height, auto_collapse, output_path, load, socket_path, buffer_lines):
     multiplex = Multiplex(
         verbose=verbose,
         box_height=box_height[0],
+        auto_collapse=auto_collapse,
         output_path=output_path,
         socket_path=socket_path,
         buffer_lines=buffer_lines,
@@ -94,6 +95,13 @@ def validate(box_height, process, socket_path, title, wait, load):
     help="By default, buffer length is unbounded. Use this to have a maximum number of lines for each " "buffer.",
 )
 @click.option(
+    "-a/-A",
+    "--auto-collapse/--no-auto-collapse",
+    type=bool,
+    envvar="MULTIPLEX_AUTO_COLLAPSE",
+    help="Collapse buffers automatically upon successful completion",
+)
+@click.option(
     "-o",
     "--output-path",
     help="Root directory to use when saving output",
@@ -114,7 +122,9 @@ def validate(box_height, process, socket_path, title, wait, load):
 @click.help_option("-h", "--help")
 @click.version_option(None, "--version")
 @click.option("-v", "--verbose", is_flag=True)
-def main(process, title, verbose, box_height, output_path, wait, load, socket_path, buffer_lines, server):
+def main(
+    process, title, verbose, box_height, auto_collapse, output_path, wait, load, socket_path, buffer_lines, server
+):
     validate(
         box_height=box_height,
         process=process,
@@ -148,6 +158,7 @@ def main(process, title, verbose, box_height, output_path, wait, load, socket_pa
             title=title,
             verbose=verbose,
             box_height=box_height,
+            auto_collapse=auto_collapse,
             output_path=output_path,
             load=load,
             socket_path=socket_path,

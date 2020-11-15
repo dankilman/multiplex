@@ -67,7 +67,7 @@ class DescriptorQueueItem:
 
 
 class Viewer:
-    def __init__(self, descriptors, box_height, verbose, socket_path, output_path, buffer_lines):
+    def __init__(self, descriptors, box_height, auto_collapse, verbose, socket_path, output_path, buffer_lines):
         self.holders = []
         self.stream_id_to_holder = {}
         self.holder_to_stream_id = {}
@@ -78,6 +78,7 @@ class Viewer:
         self.events = ViewerEvents()
         self.export = Export(self)
         self.box_height = box_height
+        self.auto_collapse = auto_collapse
         self.buffer_lines = buffer_lines
         self.verbose = verbose
         self.socket_path = socket_path
@@ -363,6 +364,8 @@ class Viewer:
                 data(holder)
             elif data is STREAM_DONE:
                 holder.state.stream_done = True
+                if self.auto_collapse and not holder.iterator.metadata.get("exit_code"):
+                    holder.box.toggle_collapse(value=True)
                 holder.box.exit_input_mode()
             else:
                 holder.buffer.write(data)
