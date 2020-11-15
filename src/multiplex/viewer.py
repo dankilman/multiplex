@@ -241,7 +241,7 @@ class Viewer:
         )
         box_height = descriptor.box_height or self.box_height
         holder = BoxHolder(
-            index, iterator=iterator, box_height=box_height, auto_collapse=self.auto_collapse, viewer=self
+            index, iterator=iterator, box_height=box_height, viewer=self
         )
         state = holder.state
         if descriptor.wrap is not None:
@@ -366,6 +366,8 @@ class Viewer:
                 data(holder)
             elif data is STREAM_DONE:
                 holder.state.stream_done = True
+                if self.auto_collapse and not holder.iterator.metadata.get("exit_code"):
+                    holder.box.toggle_collapse(value=True)
                 holder.box.exit_input_mode()
             else:
                 holder.buffer.write(data)

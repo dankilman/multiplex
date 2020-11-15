@@ -8,17 +8,17 @@ logger = logging.getLogger("multiplex.box")
 
 
 class BoxHolder:
-    def __init__(self, index, iterator, box_height, auto_collapse, viewer):
+    def __init__(self, index, iterator, box_height, viewer):
         self.id = id(self)
         self.index = index
         self.iterator = iterator
         self.buffer = Buffer(buffer_lines=viewer.buffer_lines)
-        self.state = BoxState(box_height, auto_collapse)
+        self.state = BoxState(box_height)
         self.box = TextBox(viewer, self)
 
 
 class BoxState:
-    def __init__(self, box_height, auto_collapse):
+    def __init__(self, box_height):
         self.wrap = True
         self.auto_scroll = True
         self.input_mode = False
@@ -30,7 +30,6 @@ class BoxState:
         self.text = None
         self.changed_height = box_height is not None
         self.box_height = box_height
-        self.auto_collapse = auto_collapse
 
 
 class TextBox:
@@ -177,8 +176,6 @@ class TextBox:
         return True
 
     def exit_input_mode(self):
-        if self.state.auto_collapse and self.holder.iterator.metadata["exit_code"] == 0:
-            self.toggle_collapse(value=True)
         self.state.input_mode = False
         ansi.hide_cursor()
         return True
