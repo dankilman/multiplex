@@ -44,18 +44,16 @@ class TextBox:
         return self.holder.index
 
     def update(self):
-        self.update_text()
+        lines = self.update_text()
 
         screen_y_1, location_1 = self.view.get_box_top_line(self.index)
         screen_y_2, location_2 = self.view.get_box_bottom_line(self.index)
 
-        text = self.state.text
-
         if location_1 == ViewLocation.ABOVE:
-            text = "\n".join(text.split("\n")[screen_y_1:])
+            lines = lines[screen_y_1:]
             screen_y_1 = 0
         if location_2 == ViewLocation.BELOW:
-            text = "\n".join(text.split("\n")[:-screen_y_2])
+            lines = lines[:-screen_y_2]
             screen_y_2 = self.view.get_max_box_line()
 
         logger.debug(
@@ -70,7 +68,7 @@ class TextBox:
         ansi.text_box(
             from_row=screen_y_1,
             to_row=screen_y_2,
-            text=text,
+            text="".join(lines),
         )
 
     def update_text(self):
@@ -83,10 +81,10 @@ class TextBox:
             start_column=self.state.first_column,
             wrap=self.state.wrap,
         )
-        self.state.text = "\n".join(line for _, line in lines)
         if not self.state.wrap:
             value = max(line_length for line_length, _ in lines) if lines else 0
             self.state.view_longest_line = value
+        return [line for _, line in lines]
 
     def move_line_up(self):
         return self.set_minmax_up_motion(self.state.buffer_start_line - 1)
