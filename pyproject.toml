@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "multiplex"
-version = "0.5.1"
+version = "0.6.0"
 description = "View output of multiple processes, in parallel, in the console, with an interactive TUI"
 authors = ["Dan Kilman <dankilman@gmail.com>"]
 license = "MIT"
