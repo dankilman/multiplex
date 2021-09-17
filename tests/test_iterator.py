@@ -131,7 +131,7 @@ async def test_async_iter():
             return self
 
         async def __anext__(self):
-            if self.current_index < len(self.values) - 1:
+            if self.current_index < len(self.values):
                 index = self.current_index
                 self.current_index += 1
                 return self.values[index]
@@ -154,7 +154,7 @@ async def test_iterable():
             return self
 
         def __next__(self):
-            if self.current_index < len(self.values) - 1:
+            if self.current_index < len(self.values):
                 index = self.current_index
                 self.current_index += 1
                 return self.values[index]

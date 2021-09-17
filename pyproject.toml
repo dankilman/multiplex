@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "multiplex"
-version = "0.5.1"
+version = "0.6.0"
 description = "View output of multiple processes, in parallel, in the console, with an interactive TUI"
 authors = ["Dan Kilman <dankilman@gmail.com>"]
 license = "MIT"
@@ -14,7 +14,7 @@ aiostream = "^0.4.1"
 easy-ansi = "^0.3"
 pyte = "^0.8.0"
 aiofiles = "^0.5.0"
-click = "^7.1.2"
+click = ">=7.1.2"
 
 [tool.poetry.dev-dependencies]
 ansicolors = "^1.1.8"
