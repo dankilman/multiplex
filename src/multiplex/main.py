@@ -86,7 +86,7 @@ def validate(box_height, process, socket_path, title, wait, load):
 @click.argument("process", nargs=-1)
 @click.option("-t", "--title", multiple=True)
 @click.option("-b", "--box-height", type=int, multiple=True)
-@click.option("--wait/--no-wait", "-w/-W", multiple=True)
+@click.option("--wait/--no-wait", "-w/-W", multiple=True, default=None)
 @click.option("-l", "--load")
 @click.option(
     "--buffer-lines",
