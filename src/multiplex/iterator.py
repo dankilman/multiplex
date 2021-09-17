@@ -18,6 +18,7 @@ from multiplex import ansi
 from multiplex.actions import SetTitle, BoxActions, UpdateMetadata
 from multiplex.ansi import C, theme
 from multiplex.controller import Controller
+from multiplex.process import Process
 from multiplex.refs import SPLIT, STOP
 
 MULTIPLEX_SOCKET_PATH = "MULTIPLEX_SOCKET_PATH"
@@ -101,7 +102,7 @@ def _extract_title(current_title, obj):
     return None
 
 
-def _process_str_to_iterator(cmd, context):
+def _process_descriptor_to_iterator(descriptor: Process, context):
     def _setsize(fd):
         cols, rows = ansi.get_size()
         s = struct.pack("HHHH", rows, cols, 0, 0)
@@ -117,14 +118,26 @@ def _process_str_to_iterator(cmd, context):
             MULTIPLEX_STREAM_ID: context.get("stream_id", ""),
         }
     )
-    obj = asyncio.subprocess.create_subprocess_shell(
-        cmd,
-        stdin=slave,
-        stdout=slave,
-        stderr=slave,
-        env=env,
-        cwd=cwd,
-    )
+    cmd = descriptor.cmd
+    if isinstance(cmd, str):
+        obj = asyncio.subprocess.create_subprocess_shell(
+            cmd,
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            env=env,
+            cwd=cwd,
+        )
+    else:
+        obj = asyncio.subprocess.create_subprocess_exec(
+            cmd[0],
+            *cmd[1:],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            env=env,
+            cwd=cwd,
+        )
     return obj, (master, slave)
 
 
@@ -136,7 +149,7 @@ def _str_to_iterator(str_value, title, context):
     elif str_value.startswith("file://"):
         obj = pathlib.Path(str_value.split("://")[1])
     else:
-        obj, (master, slave) = _process_str_to_iterator(str_value, context)
+        obj, (master, slave) = _process_descriptor_to_iterator(Process(str_value), context)
     return obj, title, (master, slave)
 
 
@@ -281,6 +294,9 @@ async def _to_iterator(obj, title, context):
     master, slave = None, None
     if isinstance(obj, str):
         obj, title, (master, slave) = _str_to_iterator(obj, title, context)
+    elif isinstance(obj, Process):
+        title = _extract_title(title, obj)
+        obj, (master, slave) = _process_descriptor_to_iterator(obj, context)
     elif isinstance(obj, (types.FunctionType, types.MethodType)):
         obj, title = _callable_to_iterator(obj, title)
 

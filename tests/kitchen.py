@@ -8,7 +8,7 @@ import time
 import colors
 from colors.colors import _color_code as cc
 
-from multiplex import ansi
+from multiplex import ansi, Process
 from multiplex import Multiplex, Controller
 from multiplex.log import init_logging
 
@@ -112,6 +112,14 @@ def run_style():
 
 def run_processes():
     return ["gls -la --group-directories-first --color=always"]
+
+
+def run_process_desc():
+    return [
+        Process("gls"),
+        Process("gls -la --group-directories-first --color=always".split(" ")),
+        Process("gls -la".split(" ")),
+    ]
 
 
 def run_controller():
@@ -227,6 +235,7 @@ whats = {
     "8": run_live,
     "9": run_live_thread_safe,
     "10": run_multiline,
+    "11": run_process_desc,
 }
 
 
