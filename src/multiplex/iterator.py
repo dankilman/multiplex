@@ -31,7 +31,7 @@ async def stream_reader_generator(reader):
             b = await reader.read(1000000)
             if not b:
                 break
-            yield b.decode()
+            yield b.decode("utf-8", "replace")
         except OSError:
             return
 
