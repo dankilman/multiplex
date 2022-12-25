@@ -1,4 +1,5 @@
 import asyncio
+import os.path
 
 from aiostream import streamcontext
 from aiostream.test_utils import assert_aiter
@@ -7,6 +8,7 @@ import pytest
 from multiplex import iterator as _iterator
 from multiplex.controller import Controller
 from multiplex.iterator import to_iterator, STOP
+from tests import resources
 
 pytestmark = pytest.mark.asyncio
 
@@ -285,3 +287,10 @@ async def test_controller_thead_safe():
     assert iterator.inner_type == "controller"
     assert iterator.title == title
     await assert_aiter(iterator.iterator, [value])
+
+
+async def test_decode1():
+    iterator = await to_iterator(f"cat {os.path.join(resources.DIR, 'test_decode1.log')}")
+    async with streamcontext(iterator.iterator) as streamer:
+        async for _ in streamer:
+            pass
